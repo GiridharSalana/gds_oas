@@ -1,10 +1,10 @@
-// Make the book title clickable and link to GitHub repo
+// Make the book title clickable and link to the same page
 document.addEventListener('DOMContentLoaded', function() {
     const menuTitle = document.querySelector('.menu-title');
     if (menuTitle) {
-        // Wrap the title text in a link
+        // Wrap the title text in a link to the current page
         const titleText = menuTitle.textContent;
-        menuTitle.innerHTML = '<a href="https://github.com/giridharsalana/laykit" target="_blank" rel="noopener noreferrer">' + titleText + '</a>';
+        menuTitle.innerHTML = '<a href="' + window.location.pathname + '">' + titleText + '</a>';
     }
     
     // Start with sidebar collapsed
