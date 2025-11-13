@@ -110,7 +110,6 @@ jobs:
           touch target/doc/.nojekyll
 
       - name: Upload docs artifact
-        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: documentation
