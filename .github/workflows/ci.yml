@@ -167,14 +167,21 @@ jobs:
 
       - name: Prepare docs for GitHub Pages
         run: |
+          # Create staging directory and copy all docs
+          mkdir -p target/pages
+          cp -r target/doc/* target/pages/
+          # Move crate-specific docs to root level
+          mv target/pages/gds_oas/* target/pages/
+          # Remove now-empty crate directory
+          rmdir target/pages/gds_oas
           # Create .nojekyll file to disable Jekyll processing
-          touch target/doc/gds_oas/.nojekyll
+          touch target/pages/.nojekyll
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
         with:
           name: documentation
-          path: target/doc/gds_oas
+          path: target/pages
 
   deploy-docs:
     name: Deploy Documentation to GitHub Pages
