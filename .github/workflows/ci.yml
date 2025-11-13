@@ -382,6 +382,17 @@ jobs:
           fi
           echo "✓ Version verified: $CARGO_VERSION"
 
+      - name: Regenerate Cargo.lock and commit if changed
+        run: |
+          cargo generate-lockfile
+          if ! git diff-index --quiet HEAD -- Cargo.lock; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Cargo.lock
+            git commit -m "chore: update Cargo.lock for publish"
+            git push origin HEAD:main
+          fi
+
       - name: Verify working directory is clean
         run: |
           if ! git diff-index --quiet HEAD --; then
