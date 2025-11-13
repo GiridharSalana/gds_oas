@@ -752,7 +752,7 @@ impl GDSTime {
     /// # Examples
     ///
     /// ```
-    /// use gds_oas::GDSTime;
+    /// use laykit::GDSTime;
     ///
     /// let time = GDSTime::now();
     /// assert!(time.year >= 2024);

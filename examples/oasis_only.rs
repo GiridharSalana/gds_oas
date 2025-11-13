@@ -1,6 +1,6 @@
 // Example demonstrating OASIS functionality (fully working)
 
-use gds_oas::oasis::{
+use laykit::oasis::{
     ExtensionScheme, OASISCell, OASISElement, OASISFile, OPath, Polygon, Rectangle,
 };
 

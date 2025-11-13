@@ -1,4 +1,4 @@
-//! # GDS_OAS - GDSII and OASIS File Format Library
+//! # LayKit - GDSII and OASIS File Format Library
 //!
 //! A production-ready Rust library for reading, writing, and converting between
 //! GDSII and OASIS file formats used in integrated circuit layout design.
@@ -17,7 +17,7 @@
 //! ### Reading a GDSII File
 //!
 //! ```no_run
-//! use gds_oas::GDSIIFile;
+//! use laykit::GDSIIFile;
 //!
 //! let gds = GDSIIFile::read_from_file("layout.gds")?;
 //! println!("Library: {}", gds.library_name);
@@ -28,7 +28,7 @@
 //! ### Creating a GDSII File
 //!
 //! ```
-//! use gds_oas::{GDSIIFile, GDSStructure, GDSTime, GDSElement, Boundary};
+//! use laykit::{GDSIIFile, GDSStructure, GDSTime, GDSElement, Boundary};
 //!
 //! let mut gds = GDSIIFile::new("MY_LIBRARY".to_string());
 //! gds.units = (1e-6, 1e-9); // 1 micron user unit, 1nm database unit
@@ -53,7 +53,7 @@
 //! ### Reading an OASIS File
 //!
 //! ```no_run
-//! use gds_oas::OASISFile;
+//! use laykit::OASISFile;
 //!
 //! let oasis = OASISFile::read_from_file("layout.oas")?;
 //! println!("Cells: {}", oasis.cells.len());
@@ -63,7 +63,7 @@
 //! ### Format Conversion
 //!
 //! ```no_run
-//! use gds_oas::{GDSIIFile, converter};
+//! use laykit::{GDSIIFile, converter};
 //!
 //! // Convert GDSII to OASIS
 //! let gds = GDSIIFile::read_from_file("input.gds")?;

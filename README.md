@@ -1,4 +1,4 @@
-# GDS_OAS
+# LayKit
 
 > **Production-ready Rust library for GDSII and OASIS IC layout file formats**
 
@@ -94,8 +94,8 @@ A high-performance, memory-safe library for reading, writing, and converting bet
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/gds_oas.git
-cd gds_oas
+git clone https://github.com/giridharsalana/laykit.git
+cd laykit
 
 # Build the library
 cargo build --release
@@ -114,7 +114,7 @@ cargo doc --open
 ### Minimal Example
 
 ```rust
-use gds_oas::GDSIIFile;
+use laykit::GDSIIFile;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read GDSII file
@@ -143,14 +143,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-gds_oas = { path = "path/to/gds_oas" }
+laykit = { path = "path/to/laykit" }
 ```
 
 ### From Crates.io (Coming Soon)
 
 ```toml
 [dependencies]
-gds_oas = "0.1.0"
+laykit = "0.1.0"
 ```
 
 ### System Requirements
@@ -169,7 +169,7 @@ gds_oas = "0.1.0"
 #### Read GDSII File
 
 ```rust
-use gds_oas::GDSIIFile;
+use laykit::GDSIIFile;
 
 let gds = GDSIIFile::read_from_file("design.gds")?;
 
@@ -192,7 +192,7 @@ for structure in &gds.structures {
 #### Read OASIS File
 
 ```rust
-use gds_oas::OASISFile;
+use laykit::OASISFile;
 
 let oasis = OASISFile::read_from_file("design.oas")?;
 
@@ -210,7 +210,7 @@ for cell in &oasis.cells {
 #### Create GDSII File
 
 ```rust
-use gds_oas::{Boundary, GDSElement, GDSIIFile, GDSStructure, GDSTime};
+use laykit::{Boundary, GDSElement, GDSIIFile, GDSStructure, GDSTime};
 
 // Create library
 let mut gds = GDSIIFile::new("MY_LIBRARY".to_string());
@@ -245,7 +245,7 @@ gds.write_to_file("output.gds")?;
 #### Create OASIS File
 
 ```rust
-use gds_oas::{OASISCell, OASISElement, OASISFile, Rectangle};
+use laykit::{OASISCell, OASISElement, OASISFile, Rectangle};
 
 // Create OASIS file
 let mut oasis = OASISFile::new();
@@ -276,7 +276,7 @@ oasis.write_to_file("output.oas")?;
 ### Processing Elements
 
 ```rust
-use gds_oas::{GDSElement, GDSIIFile};
+use laykit::{GDSElement, GDSIIFile};
 
 let gds = GDSIIFile::read_from_file("design.gds")?;
 
@@ -316,8 +316,8 @@ for structure in &gds.structures {
 #### GDSII to OASIS
 
 ```rust
-use gds_oas::converter::gdsii_to_oasis;
-use gds_oas::GDSIIFile;
+use laykit::converter::gdsii_to_oasis;
+use laykit::GDSIIFile;
 
 // Read GDSII
 let gds = GDSIIFile::read_from_file("input.gds")?;
@@ -334,8 +334,8 @@ println!("Converted {} structures", gds.structures.len());
 #### OASIS to GDSII
 
 ```rust
-use gds_oas::converter::oasis_to_gdsii;
-use gds_oas::OASISFile;
+use laykit::converter::oasis_to_gdsii;
+use laykit::OASISFile;
 
 // Read OASIS
 let oasis = OASISFile::read_from_file("input.oas")?;
@@ -352,7 +352,7 @@ println!("Converted {} cells", oasis.cells.len());
 ### Advanced: Hierarchical Design
 
 ```rust
-use gds_oas::{GDSElement, GDSIIFile, GDSStructure, GDSTime, StructRef};
+use laykit::{GDSElement, GDSIIFile, GDSStructure, GDSTime, StructRef};
 
 let mut gds = GDSIIFile::new("HIERARCHICAL".to_string());
 
@@ -391,7 +391,7 @@ gds.write_to_file("hierarchical.gds")?;
 
 ### Main Types
 
-#### GDSII Module (`gds_oas::gdsii`)
+#### GDSII Module (`laykit::gdsii`)
 
 - **`GDSIIFile`** - Main file structure
   - `new(library_name: String) -> Self`
@@ -419,7 +419,7 @@ gds.write_to_file("hierarchical.gds")?;
   - `now() -> Self` - Current time
   - `year, month, day, hour, minute, second: i16`
 
-#### OASIS Module (`gds_oas::oasis`)
+#### OASIS Module (`laykit::oasis`)
 
 - **`OASISFile`** - Main file structure
   - `new() -> Self`
@@ -447,7 +447,7 @@ gds.write_to_file("hierarchical.gds")?;
   - `text_strings: HashMap<u32, String>`
   - `prop_names: HashMap<u32, String>`
 
-#### Converter Module (`gds_oas::converter`)
+#### Converter Module (`laykit::converter`)
 
 - **`gdsii_to_oasis(gds: &GDSIIFile) -> Result<OASISFile, Box<dyn Error>>`**
   - Convert GDSII file to OASIS format
@@ -698,7 +698,7 @@ jobs:
 ## 🏗️ Project Structure
 
 ```
-gds_oas/
+laykit/
 ├── Cargo.toml                # Project metadata and configuration
 ├── Cargo.lock                # Locked dependency versions
 ├── LICENSE                   # MIT License
@@ -740,7 +740,7 @@ gds_oas/
 
 ```rust
 // Library structure
-gds_oas
+laykit
 ├── gdsii                     // GDSII module
 │   ├── GDSIIFile
 │   ├── GDSStructure
@@ -786,9 +786,9 @@ gds_oas
 - [ ] **Streaming Parser** - For files >1GB
 - [ ] **CLI Tool** - Command-line utility
   ```bash
-  gds_oas convert input.gds output.oas
-  gds_oas info design.gds
-  gds_oas validate layout.gds
+  laykit convert input.gds output.oas
+  laykit info design.gds
+  laykit validate layout.gds
   ```
 - [ ] **Property Enhancements** - Advanced metadata handling
 - [ ] **AREF Expansion** - Full array reference expansion
@@ -821,8 +821,8 @@ Contributions are welcome! This project follows standard Rust development practi
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/gds_oas.git
-cd gds_oas
+git clone https://github.com/giridharsalana/laykit.git
+cd laykit
 
 # Install Rust (if needed)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -880,7 +880,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 ```
 MIT License
 
-Copyright (c) 2025 GDS_OAS Contributors
+Copyright (c) 2025 LayKit Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -901,9 +901,9 @@ copies of the Software...
 
 ## 📞 Support & Contact
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/gds_oas/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/gds_oas/discussions)
-- **Documentation**: [docs.rs/gds_oas](https://docs.rs/gds_oas) (coming soon)
+- **Issues**: [GitHub Issues](https://github.com/giridharsalana/laykit/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/giridharsalana/laykit/discussions)
+- **Documentation**: [docs.rs/laykit](https://docs.rs/laykit) (coming soon)
 
 ---
 
@@ -930,6 +930,6 @@ copies of the Software...
 
 **Production-Ready** | **Zero Dependencies** | **100% Memory Safe**
 
-[⭐ Star on GitHub](https://github.com/yourusername/gds_oas) | [📦 View on Crates.io](https://crates.io/crates/gds_oas) | [📖 Documentation](https://docs.rs/gds_oas)
+[⭐ Star on GitHub](https://github.com/giridharsalana/laykit) | [📦 View on Crates.io](https://crates.io/crates/laykit) | [📖 Documentation](https://docs.rs/laykit)
 
 </div>

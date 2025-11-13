@@ -1,6 +1,6 @@
 // Example demonstrating GDSII functionality (fully working)
 
-use gds_oas::gdsii::{
+use laykit::gdsii::{
     Boundary, GDSElement, GDSIIFile, GDSStructure, GDSTime, GPath, GText, StructRef,
 };
 

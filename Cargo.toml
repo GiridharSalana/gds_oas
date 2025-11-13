@@ -1,11 +1,11 @@
 [package]
-name = "gds_oas"
+name = "laykit"
 version = "0.1.0"
 edition = "2021"
 authors = ["Giridhar Salana <giridharsalana@gmail.com>"]
-description = "Production-ready Rust library for GDSII and OASIS IC layout file formats"
+description = "LayKit - Production-ready Rust library for GDSII and OASIS IC layout file formats"
 readme = "README.md"
-repository = "https://github.com/giridharsalana/gds_oas"
+repository = "https://github.com/giridharsalana/laykit"
 license = "MIT"
 keywords = ["gdsii", "oasis", "ic-layout", "vlsi", "eda"]
 categories = ["parser-implementations", "encoding"]
@@ -15,7 +15,7 @@ categories = ["parser-implementations", "encoding"]
 [dev-dependencies]
 
 [lib]
-name = "gds_oas"
+name = "laykit"
 path = "src/lib.rs"
 
 [[example]]
