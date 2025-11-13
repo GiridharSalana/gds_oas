@@ -53,13 +53,8 @@ impl<R: Read + Seek> StreamingGDSIIReader<R> {
         &mut self,
         callback: &mut C,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        loop {
-            match self.read_next_structure()? {
-                Some(structure) => {
-                    callback.on_structure(&structure)?;
-                }
-                None => break,
-            }
+        while let Some(structure) = self.read_next_structure()? {
+            callback.on_structure(&structure)?;
         }
         Ok(())
     }
@@ -175,14 +170,14 @@ impl<R: Read + Seek> StreamingGDSIIReader<R> {
         // GDSII Real8 format: [sign:1][exponent:7][mantissa:56]
         let sign = if (buf[0] & 0x80) != 0 { -1.0 } else { 1.0 };
         let exponent = (buf[0] & 0x7F) as i32 - 64;
-        
+
         let mut mantissa = 0u64;
-        for i in 1..8 {
-            mantissa = (mantissa << 8) | (buf[i] as u64);
+        for &byte in buf.iter().skip(1) {
+            mantissa = (mantissa << 8) | (byte as u64);
         }
-        
+
         let mantissa_f = mantissa as f64 / (1u64 << 56) as f64;
-        
+
         Ok(sign * mantissa_f * 16.0_f64.powi(exponent))
     }
 
@@ -244,8 +239,7 @@ impl<R: Read + Seek> StreamingGDSIIReader<R> {
             // Skip element data for now (in a full implementation, we'd parse each element type)
             // This is a simplified streaming parser that focuses on structure-level processing
             if len > 4 {
-                self.reader
-                    .seek(SeekFrom::Current((len - 4) as i64))?;
+                self.reader.seek(SeekFrom::Current((len - 4) as i64))?;
             }
         }
 
@@ -254,6 +248,7 @@ impl<R: Read + Seek> StreamingGDSIIReader<R> {
 }
 
 /// Statistics collector for streaming processing
+#[derive(Default)]
 pub struct StatisticsCollector {
     pub structure_count: usize,
     pub element_count: usize,
@@ -262,11 +257,7 @@ pub struct StatisticsCollector {
 
 impl StatisticsCollector {
     pub fn new() -> Self {
-        Self {
-            structure_count: 0,
-            element_count: 0,
-            total_bytes_processed: 0,
-        }
+        Self::default()
     }
 }
 
@@ -279,13 +270,14 @@ impl StructureCallback for StatisticsCollector {
 }
 
 /// Structure name collector
+#[derive(Default)]
 pub struct StructureNameCollector {
     pub names: Vec<String>,
 }
 
 impl StructureNameCollector {
     pub fn new() -> Self {
-        Self { names: Vec::new() }
+        Self::default()
     }
 }
 
@@ -383,4 +375,3 @@ mod tests {
         assert_eq!(collector.names, names);
     }
 }
-

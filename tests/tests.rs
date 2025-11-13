@@ -1098,8 +1098,11 @@ mod streaming_tests {
         gds.write_to_writer(&mut buffer).unwrap();
 
         let file_size = buffer.len();
-        println!("Large test file size: {} bytes ({:.2} MB)", 
-            file_size, file_size as f64 / 1_048_576.0);
+        println!(
+            "Large test file size: {} bytes ({:.2} MB)",
+            file_size,
+            file_size as f64 / 1_048_576.0
+        );
 
         // Stream read
         let cursor = Cursor::new(buffer);

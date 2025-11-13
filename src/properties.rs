@@ -196,4 +196,3 @@ mod tests {
         assert_eq!(props[3].name, "enabled");
     }
 }
-

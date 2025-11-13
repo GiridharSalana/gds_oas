@@ -173,11 +173,18 @@ fn show_gds_info(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════");
     println!();
     println!("File: {}", file_path);
-    println!("Size: {} bytes ({:.2} KB)", metadata.len(), metadata.len() as f64 / 1024.0);
+    println!(
+        "Size: {} bytes ({:.2} KB)",
+        metadata.len(),
+        metadata.len() as f64 / 1024.0
+    );
     println!();
     println!("Library: {}", gds.library_name);
     println!("Version: {}", gds.version);
-    println!("Units: {:.3e} user, {:.3e} database (meters)", gds.units.0, gds.units.1);
+    println!(
+        "Units: {:.3e} user, {:.3e} database (meters)",
+        gds.units.0, gds.units.1
+    );
     println!();
     println!("Structures: {}", gds.structures.len());
     println!();
@@ -187,7 +194,8 @@ fn show_gds_info(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     for (idx, structure) in gds.structures.iter().enumerate() {
         println!("  [{}] {}", idx + 1, structure.name);
-        println!("      Created: {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        println!(
+            "      Created: {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
             structure.creation_time.year,
             structure.creation_time.month,
             structure.creation_time.day,
@@ -237,7 +245,11 @@ fn show_oas_info(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════");
     println!();
     println!("File: {}", file_path);
-    println!("Size: {} bytes ({:.2} KB)", metadata.len(), metadata.len() as f64 / 1024.0);
+    println!(
+        "Size: {} bytes ({:.2} KB)",
+        metadata.len(),
+        metadata.len() as f64 / 1024.0
+    );
     println!();
     println!("Version: {}", oasis.version);
     println!("Unit: {:.3e} meters", oasis.unit);
@@ -372,7 +384,9 @@ fn validate_gds(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
         }
 
         // Check for duplicate structure names
-        let duplicate_count = gds.structures.iter()
+        let duplicate_count = gds
+            .structures
+            .iter()
             .filter(|s| s.name == structure.name)
             .count();
         if duplicate_count > 1 {
@@ -386,7 +400,9 @@ fn validate_gds(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
                     if b.xy.len() < 4 {
                         issues.push(format!(
                             "Structure '{}' element {} (Boundary): insufficient points ({} < 4)",
-                            structure.name, elem_idx, b.xy.len()
+                            structure.name,
+                            elem_idx,
+                            b.xy.len()
                         ));
                     }
                     if b.xy.first() != b.xy.last() {
@@ -400,7 +416,9 @@ fn validate_gds(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
                     if p.xy.len() < 2 {
                         issues.push(format!(
                             "Structure '{}' element {} (Path): insufficient points ({} < 2)",
-                            structure.name, elem_idx, p.xy.len()
+                            structure.name,
+                            elem_idx,
+                            p.xy.len()
                         ));
                     }
                 }
@@ -459,9 +477,7 @@ fn validate_oas(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
         }
 
         // Check for duplicate cell names
-        let duplicate_count = oasis.cells.iter()
-            .filter(|c| c.name == cell.name)
-            .count();
+        let duplicate_count = oasis.cells.iter().filter(|c| c.name == cell.name).count();
         if duplicate_count > 1 {
             issues.push(format!("Duplicate cell name: '{}'", cell.name));
         }
@@ -481,7 +497,9 @@ fn validate_oas(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
                     if p.points.len() < 3 {
                         issues.push(format!(
                             "Cell '{}' element {} (Polygon): insufficient points ({} < 3)",
-                            cell.name, elem_idx, p.points.len()
+                            cell.name,
+                            elem_idx,
+                            p.points.len()
                         ));
                     }
                 }
@@ -489,7 +507,9 @@ fn validate_oas(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
                     if p.points.len() < 2 {
                         issues.push(format!(
                             "Cell '{}' element {} (Path): insufficient points ({} < 2)",
-                            cell.name, elem_idx, p.points.len()
+                            cell.name,
+                            elem_idx,
+                            p.points.len()
                         ));
                     }
                 }
@@ -508,4 +528,3 @@ fn validate_oas(file_path: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
 
     Ok(issues)
 }
-
