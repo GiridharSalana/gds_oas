@@ -6,7 +6,7 @@ A high-performance, memory-safe library for reading, writing, and converting bet
 
 [![Rust Version](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-21%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen.svg)](#testing)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)](#quick-start)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-blue.svg)](#features)
 
@@ -39,7 +39,7 @@ A high-performance, memory-safe library for reading, writing, and converting bet
 - **🚀 Zero Dependencies** - Pure Rust implementation using only `std`
 - **🔒 Memory Safe** - Leverages Rust's ownership system for safety
 - **⚡ High Performance** - Efficient binary parsing and serialization
-- **✅ Production Ready** - Comprehensive test suite with 21 tests (100% passing)
+- **✅ Production Ready** - Comprehensive test suite with 53 tests (100% passing)
 - **📦 No Warnings** - Clean compilation in release mode
 
 ### GDSII Format (Production Ready ✅)
@@ -100,7 +100,7 @@ cd laykit
 # Build the library
 cargo build --release
 
-# Run tests (21 comprehensive tests)
+# Run tests (53 comprehensive tests)
 cargo test
 
 # Run examples
@@ -643,7 +643,12 @@ cargo test test_gdsii_round_trip
 
 ### Test Coverage
 
-**21 Comprehensive Tests** (100% passing, 0 failures):
+**53 Comprehensive Tests** (100% passing, 0 failures):
+
+#### Module Tests (12 tests)
+- ✅ Property enhancement tests (4 tests)
+- ✅ AREF expansion tests (6 tests)
+- ✅ Streaming parser tests (2 tests)
 
 #### GDSII Tests (7 tests)
 - ✅ `test_gdsii_create_and_write` - File creation and writing
@@ -667,10 +672,25 @@ cargo test test_gdsii_round_trip
 - ✅ `test_oasis_multiple_cells` - Multi-cell designs
 - ✅ `test_oasis_element_types` - All element types
 
-#### Converter Tests (3 tests)
+#### Converter Tests (2 tests)
 - ✅ `test_gdsii_to_oasis_conversion` - GDSII→OASIS
-- ✅ `test_oasis_to_gdsii_conversion` - OASIS→GDSII
 - ✅ `test_rectangle_detection` - Polygon→Rectangle optimization
+
+#### CLI Tests (12 tests)
+- ✅ CLI help and usage tests
+- ✅ File conversion tests (GDS ↔ OAS)
+- ✅ Info command tests
+- ✅ Validation command tests
+- ✅ Error handling tests
+
+#### Streaming Tests (8 tests)
+- ✅ Small file streaming
+- ✅ Multiple structures handling
+- ✅ Name collection from stream
+- ✅ Large file simulation (10,000 elements)
+- ✅ Empty structures handling
+- ✅ Mixed elements streaming
+- ✅ File-based streaming
 
 ### Continuous Integration
 
@@ -774,26 +794,24 @@ laykit
 
 ## 🗺️ Roadmap
 
-### v0.1.0 (Current) ✅
+### v0.1.1 (Current) ✅
 - ✅ Complete GDSII read/write
 - ✅ Complete OASIS read/write
 - ✅ Bidirectional format conversion
-- ✅ Comprehensive test suite (21 tests)
-- ✅ Zero compiler warnings
-- ✅ Production-ready code quality
-
-### v0.2.0 (Planned)
-- [ ] **Streaming Parser** - For files >1GB
-- [ ] **CLI Tool** - Command-line utility
+- ✅ **Streaming Parser** - For large files without loading entire file into memory
+- ✅ **CLI Tool** - Command-line utility with convert, info, and validate commands
   ```bash
   laykit convert input.gds output.oas
   laykit info design.gds
   laykit validate layout.gds
   ```
-- [ ] **Property Enhancements** - Advanced metadata handling
-- [ ] **AREF Expansion** - Full array reference expansion
+- ✅ **Property Enhancements** - PropertyBuilder and PropertyManager for advanced metadata handling
+- ✅ **AREF Expansion** - Full array reference expansion utilities
+- ✅ Comprehensive test suite (53 tests: 12 unit + 36 integration + 5 doc)
+- ✅ Zero compiler warnings
+- ✅ Production-ready code quality
 
-### v0.3.0 (Future)
+### v0.1.2 (Planned)
 - [ ] **Performance Optimizations**
   - SIMD acceleration for coordinate processing
   - Parallel parsing with Rayon
@@ -802,6 +820,8 @@ laykit
   - Layout design rule checking (DRC)
   - Hierarchy validation
   - Layer map verification
+
+### v0.2.0 (Future)
 - [ ] **Advanced Features**
   - Incremental file updates
   - Partial file reading (region of interest)

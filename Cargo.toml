@@ -1,6 +1,6 @@
 [package]
 name = "laykit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Giridhar Salana <giridharsalana@gmail.com>"]
 description = "laykit - Production-ready Rust library for GDSII and OASIS IC layout file formats"
@@ -17,6 +17,10 @@ categories = ["parser-implementations", "encoding"]
 [lib]
 name = "laykit"
 path = "src/lib.rs"
+
+[[bin]]
+name = "laykit"
+path = "src/bin/laykit.rs"
 
 [[example]]
 name = "gdsii_only"

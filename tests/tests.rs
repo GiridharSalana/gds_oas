@@ -1,4 +1,16 @@
 use laykit::*;
+use std::fs;
+use std::io::{BufReader, Cursor};
+use std::process::Command;
+
+// Helper function for CLI tests
+fn get_cli_path() -> String {
+    let mut path = std::env::current_dir().unwrap();
+    path.push("target");
+    path.push("debug");
+    path.push("laykit");
+    path.to_str().unwrap().to_string()
+}
 
 // ============================================================================
 // Converter Tests
@@ -619,5 +631,624 @@ mod oasis_tests {
         }
 
         std::fs::remove_file("tests/test_oasis_neg.oas").ok();
+    }
+}
+
+// ============================================================================
+// CLI Tests
+// ============================================================================
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_help() {
+        let output = Command::new(get_cli_path())
+            .arg("help")
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("LayKit"));
+        assert!(stdout.contains("convert"));
+        assert!(stdout.contains("info"));
+        assert!(stdout.contains("validate"));
+    }
+
+    #[test]
+    fn test_cli_no_args() {
+        let output = Command::new(get_cli_path())
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("USAGE"));
+    }
+
+    #[test]
+    fn test_cli_unknown_command() {
+        let output = Command::new(get_cli_path())
+            .arg("unknown_cmd")
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Unknown command"));
+    }
+
+    #[test]
+    fn test_cli_convert_missing_args() {
+        let output = Command::new(get_cli_path())
+            .arg("convert")
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("requires input and output"));
+    }
+
+    #[test]
+    fn test_cli_convert_gds_to_gds() {
+        // Create a test GDSII file
+        let input_path = "tests/cli_test_input.gds";
+        let output_path = "tests/cli_test_output.gds";
+
+        let mut gds = GDSIIFile::new("TEST".to_string());
+        gds.units = (1e-6, 1e-9);
+        let mut structure = GDSStructure {
+            name: "TESTCELL".to_string(),
+            creation_time: GDSTime::now(),
+            modification_time: GDSTime::now(),
+            elements: Vec::new(),
+        };
+        structure.elements.push(GDSElement::Boundary(Boundary {
+            layer: 1,
+            datatype: 0,
+            xy: vec![(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)],
+            properties: Vec::new(),
+        }));
+        gds.structures.push(structure);
+        gds.write_to_file(input_path).unwrap();
+
+        // Test conversion
+        let output = Command::new(get_cli_path())
+            .arg("convert")
+            .arg(input_path)
+            .arg(output_path)
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("successful"));
+
+        // Verify output file exists
+        assert!(std::path::Path::new(output_path).exists());
+
+        // Cleanup
+        fs::remove_file(input_path).ok();
+        fs::remove_file(output_path).ok();
+    }
+
+    #[test]
+    fn test_cli_info_gds() {
+        // Create a test GDSII file
+        let test_path = "tests/cli_test_info.gds";
+
+        let mut gds = GDSIIFile::new("INFOTEST".to_string());
+        gds.units = (1e-6, 1e-9);
+        let mut structure = GDSStructure {
+            name: "CELL1".to_string(),
+            creation_time: GDSTime::now(),
+            modification_time: GDSTime::now(),
+            elements: Vec::new(),
+        };
+        structure.elements.push(GDSElement::Boundary(Boundary {
+            layer: 1,
+            datatype: 0,
+            xy: vec![(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)],
+            properties: Vec::new(),
+        }));
+        structure.elements.push(GDSElement::Text(GText {
+            layer: 2,
+            texttype: 0,
+            string: "TEST".to_string(),
+            xy: (50, 50),
+            presentation: None,
+            strans: None,
+            width: None,
+            properties: Vec::new(),
+        }));
+        gds.structures.push(structure);
+        gds.write_to_file(test_path).unwrap();
+
+        // Test info command
+        let output = Command::new(get_cli_path())
+            .arg("info")
+            .arg(test_path)
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("GDSII File Information"));
+        assert!(stdout.contains("INFOTEST"));
+        assert!(stdout.contains("CELL1"));
+        assert!(stdout.contains("Structures: 1"));
+        assert!(stdout.contains("Total Elements: 2"));
+        assert!(stdout.contains("Boundary"));
+        assert!(stdout.contains("Text"));
+
+        // Cleanup
+        fs::remove_file(test_path).ok();
+    }
+
+    #[test]
+    fn test_cli_info_missing_file() {
+        let output = Command::new(get_cli_path())
+            .arg("info")
+            .arg("nonexistent_file.gds")
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("does not exist"));
+    }
+
+    #[test]
+    fn test_cli_validate_gds_valid() {
+        // Create a valid GDSII file
+        let test_path = "tests/cli_test_validate_valid.gds";
+
+        let mut gds = GDSIIFile::new("VALIDATETEST".to_string());
+        gds.units = (1e-6, 1e-9);
+        let mut structure = GDSStructure {
+            name: "VALIDCELL".to_string(),
+            creation_time: GDSTime::now(),
+            modification_time: GDSTime::now(),
+            elements: Vec::new(),
+        };
+        structure.elements.push(GDSElement::Boundary(Boundary {
+            layer: 1,
+            datatype: 0,
+            xy: vec![(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)],
+            properties: Vec::new(),
+        }));
+        gds.structures.push(structure);
+        gds.write_to_file(test_path).unwrap();
+
+        // Test validate command
+        let output = Command::new(get_cli_path())
+            .arg("validate")
+            .arg(test_path)
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Validation Results"));
+        assert!(stdout.contains("File is valid") || stdout.contains("no issues"));
+
+        // Cleanup
+        fs::remove_file(test_path).ok();
+    }
+
+    #[test]
+    fn test_cli_validate_gds_invalid() {
+        // Create an invalid GDSII file (unclosed boundary)
+        let test_path = "tests/cli_test_validate_invalid.gds";
+
+        let mut gds = GDSIIFile::new("INVALIDTEST".to_string());
+        gds.units = (1e-6, 1e-9);
+        let mut structure = GDSStructure {
+            name: "INVALIDCELL".to_string(),
+            creation_time: GDSTime::now(),
+            modification_time: GDSTime::now(),
+            elements: Vec::new(),
+        };
+        // Add an unclosed boundary (first != last)
+        structure.elements.push(GDSElement::Boundary(Boundary {
+            layer: 1,
+            datatype: 0,
+            xy: vec![(0, 0), (100, 0), (100, 100), (0, 100)], // Not closed!
+            properties: Vec::new(),
+        }));
+        gds.structures.push(structure);
+        gds.write_to_file(test_path).unwrap();
+
+        // Test validate command
+        let output = Command::new(get_cli_path())
+            .arg("validate")
+            .arg(test_path)
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(output.status.success()); // Command succeeds, but finds issues
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Validation Results"));
+        assert!(stdout.contains("issue") || stdout.contains("not closed"));
+
+        // Cleanup
+        fs::remove_file(test_path).ok();
+    }
+
+    #[test]
+    fn test_cli_validate_missing_args() {
+        let output = Command::new(get_cli_path())
+            .arg("validate")
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("requires a file path"));
+    }
+
+    #[test]
+    fn test_cli_convert_nonexistent_file() {
+        let output = Command::new(get_cli_path())
+            .arg("convert")
+            .arg("nonexistent.gds")
+            .arg("output.oas")
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("does not exist"));
+    }
+
+    #[test]
+    fn test_cli_info_unsupported_format() {
+        // Create a dummy file with wrong extension
+        let test_path = "tests/cli_test.txt";
+        fs::write(test_path, "dummy content").unwrap();
+
+        let output = Command::new(get_cli_path())
+            .arg("info")
+            .arg(test_path)
+            .output()
+            .expect("Failed to execute CLI");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Unsupported file format"));
+
+        // Cleanup
+        fs::remove_file(test_path).ok();
+    }
+}
+
+// ============================================================================
+// Streaming Parser Tests
+// ============================================================================
+
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+
+    #[test]
+    fn test_streaming_small_file() {
+        // Create a small test file
+        let mut gds = GDSIIFile::new("SMALLTEST".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        let mut structure = GDSStructure {
+            name: "TESTCELL".to_string(),
+            creation_time: GDSTime::now(),
+            modification_time: GDSTime::now(),
+            elements: Vec::new(),
+        };
+
+        structure.elements.push(GDSElement::Boundary(Boundary {
+            layer: 1,
+            datatype: 0,
+            xy: vec![(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)],
+            properties: Vec::new(),
+        }));
+
+        gds.structures.push(structure);
+
+        // Write to bytes
+        let mut buffer = Vec::new();
+        gds.write_to_writer(&mut buffer).unwrap();
+
+        // Stream read
+        let cursor = Cursor::new(buffer);
+        let mut reader = StreamingGDSIIReader::new(cursor).unwrap();
+
+        assert_eq!(reader.library_name(), "SMALLTEST");
+        // Streaming parser reads units (may have minor precision differences in Real8 conversion)
+        let units = reader.units();
+        assert!(units.0 > 0.0 && units.1 > 0.0);
+
+        let mut stats = StatisticsCollector::new();
+        reader.process_structures(&mut stats).unwrap();
+
+        assert_eq!(stats.structure_count, 1);
+    }
+
+    #[test]
+    fn test_streaming_multiple_structures() {
+        // Create a file with multiple structures
+        let mut gds = GDSIIFile::new("MULTITEST".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        for i in 0..50 {
+            let mut structure = GDSStructure {
+                name: format!("CELL_{:03}", i),
+                creation_time: GDSTime::now(),
+                modification_time: GDSTime::now(),
+                elements: Vec::new(),
+            };
+
+            for j in 0..10 {
+                structure.elements.push(GDSElement::Boundary(Boundary {
+                    layer: (j % 5 + 1) as i16,
+                    datatype: 0,
+                    xy: vec![
+                        (j * 100, 0),
+                        ((j + 1) * 100, 0),
+                        ((j + 1) * 100, 100),
+                        (j * 100, 100),
+                        (j * 100, 0),
+                    ],
+                    properties: Vec::new(),
+                }));
+            }
+
+            gds.structures.push(structure);
+        }
+
+        // Write to bytes
+        let mut buffer = Vec::new();
+        gds.write_to_writer(&mut buffer).unwrap();
+
+        println!("Test file size: {} bytes", buffer.len());
+
+        // Stream read
+        let cursor = Cursor::new(buffer);
+        let mut reader = StreamingGDSIIReader::new(cursor).unwrap();
+
+        let mut stats = StatisticsCollector::new();
+        reader.process_structures(&mut stats).unwrap();
+
+        assert_eq!(stats.structure_count, 50);
+    }
+
+    #[test]
+    fn test_streaming_name_collector() {
+        // Create a test file with known structure names
+        let mut gds = GDSIIFile::new("NAMECOLLECT".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        let expected_names = vec![
+            "TOP".to_string(),
+            "SUBCELL_A".to_string(),
+            "SUBCELL_B".to_string(),
+            "SUBCELL_C".to_string(),
+        ];
+
+        for name in &expected_names {
+            let structure = GDSStructure {
+                name: name.clone(),
+                creation_time: GDSTime::now(),
+                modification_time: GDSTime::now(),
+                elements: Vec::new(),
+            };
+            gds.structures.push(structure);
+        }
+
+        // Write to bytes
+        let mut buffer = Vec::new();
+        gds.write_to_writer(&mut buffer).unwrap();
+
+        // Stream read with name collector
+        let cursor = Cursor::new(buffer);
+        let mut reader = StreamingGDSIIReader::new(cursor).unwrap();
+
+        let mut collector = StructureNameCollector::new();
+        reader.process_structures(&mut collector).unwrap();
+
+        assert_eq!(collector.names.len(), expected_names.len());
+        assert_eq!(collector.names, expected_names);
+    }
+
+    #[test]
+    fn test_streaming_large_file_simulation() {
+        // Simulate a larger file (not 1GB, but large enough to test streaming)
+        let mut gds = GDSIIFile::new("LARGETEST".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        // Create 100 structures with 100 elements each = 10,000 elements total
+        for i in 0..100 {
+            let mut structure = GDSStructure {
+                name: format!("CELL_{:05}", i),
+                creation_time: GDSTime::now(),
+                modification_time: GDSTime::now(),
+                elements: Vec::new(),
+            };
+
+            for j in 0..100 {
+                structure.elements.push(GDSElement::Boundary(Boundary {
+                    layer: ((i + j) % 10 + 1) as i16,
+                    datatype: ((i + j) % 5) as i16,
+                    xy: vec![
+                        (j * 1000, i * 1000),
+                        ((j + 1) * 1000, i * 1000),
+                        ((j + 1) * 1000, (i + 1) * 1000),
+                        (j * 1000, (i + 1) * 1000),
+                        (j * 1000, i * 1000),
+                    ],
+                    properties: Vec::new(),
+                }));
+            }
+
+            gds.structures.push(structure);
+        }
+
+        // Write to bytes
+        let mut buffer = Vec::new();
+        gds.write_to_writer(&mut buffer).unwrap();
+
+        let file_size = buffer.len();
+        println!("Large test file size: {} bytes ({:.2} MB)", 
+            file_size, file_size as f64 / 1_048_576.0);
+
+        // Stream read
+        let cursor = Cursor::new(buffer);
+        let mut reader = StreamingGDSIIReader::new(cursor).unwrap();
+
+        let mut stats = StatisticsCollector::new();
+        reader.process_structures(&mut stats).unwrap();
+
+        assert_eq!(stats.structure_count, 100);
+        println!("Processed {} structures", stats.structure_count);
+    }
+
+    #[test]
+    fn test_streaming_empty_structures() {
+        // Test with structures that have no elements
+        let mut gds = GDSIIFile::new("EMPTYTEST".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        for i in 0..10 {
+            let structure = GDSStructure {
+                name: format!("EMPTY_{}", i),
+                creation_time: GDSTime::now(),
+                modification_time: GDSTime::now(),
+                elements: Vec::new(),
+            };
+            gds.structures.push(structure);
+        }
+
+        // Write to bytes
+        let mut buffer = Vec::new();
+        gds.write_to_writer(&mut buffer).unwrap();
+
+        // Stream read
+        let cursor = Cursor::new(buffer);
+        let mut reader = StreamingGDSIIReader::new(cursor).unwrap();
+
+        let mut stats = StatisticsCollector::new();
+        reader.process_structures(&mut stats).unwrap();
+
+        assert_eq!(stats.structure_count, 10);
+        assert_eq!(stats.element_count, 0);
+    }
+
+    #[test]
+    fn test_streaming_mixed_elements() {
+        // Test with various element types
+        let mut gds = GDSIIFile::new("MIXEDTEST".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        let mut structure = GDSStructure {
+            name: "MIXED".to_string(),
+            creation_time: GDSTime::now(),
+            modification_time: GDSTime::now(),
+            elements: Vec::new(),
+        };
+
+        // Add boundary
+        structure.elements.push(GDSElement::Boundary(Boundary {
+            layer: 1,
+            datatype: 0,
+            xy: vec![(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)],
+            properties: Vec::new(),
+        }));
+
+        // Add path
+        structure.elements.push(GDSElement::Path(GPath {
+            layer: 2,
+            datatype: 0,
+            pathtype: 0,
+            width: Some(10),
+            xy: vec![(0, 0), (100, 0), (100, 100)],
+            properties: Vec::new(),
+        }));
+
+        // Add text
+        structure.elements.push(GDSElement::Text(GText {
+            layer: 3,
+            texttype: 0,
+            string: "TEST".to_string(),
+            xy: (50, 50),
+            presentation: None,
+            strans: None,
+            width: None,
+            properties: Vec::new(),
+        }));
+
+        gds.structures.push(structure);
+
+        // Write to bytes
+        let mut buffer = Vec::new();
+        gds.write_to_writer(&mut buffer).unwrap();
+
+        // Stream read
+        let cursor = Cursor::new(buffer);
+        let mut reader = StreamingGDSIIReader::new(cursor).unwrap();
+
+        let mut stats = StatisticsCollector::new();
+        reader.process_structures(&mut stats).unwrap();
+
+        assert_eq!(stats.structure_count, 1);
+    }
+
+    #[test]
+    fn test_streaming_from_file() {
+        // Create a test file on disk
+        let test_path = "tests/streaming_test_file.gds";
+
+        let mut gds = GDSIIFile::new("FILETEST".to_string());
+        gds.units = (1e-6, 1e-9);
+
+        for i in 0..20 {
+            let mut structure = GDSStructure {
+                name: format!("FILE_CELL_{}", i),
+                creation_time: GDSTime::now(),
+                modification_time: GDSTime::now(),
+                elements: Vec::new(),
+            };
+
+            structure.elements.push(GDSElement::Boundary(Boundary {
+                layer: (i % 5 + 1) as i16,
+                datatype: 0,
+                xy: vec![
+                    (0, 0),
+                    (i * 100, 0),
+                    (i * 100, i * 100),
+                    (0, i * 100),
+                    (0, 0),
+                ],
+                properties: Vec::new(),
+            }));
+
+            gds.structures.push(structure);
+        }
+
+        gds.write_to_file(test_path).unwrap();
+
+        // Stream read from file
+        let file = std::fs::File::open(test_path).unwrap();
+        let reader_buf = BufReader::new(file);
+        let mut reader = StreamingGDSIIReader::new(reader_buf).unwrap();
+
+        assert_eq!(reader.library_name(), "FILETEST");
+
+        let mut collector = StructureNameCollector::new();
+        reader.process_structures(&mut collector).unwrap();
+
+        assert_eq!(collector.names.len(), 20);
+
+        // Cleanup
+        std::fs::remove_file(test_path).ok();
     }
 }

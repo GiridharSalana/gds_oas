@@ -8,9 +8,13 @@
 //! - **Full GDSII Support** - Read and write `.gds` files with all element types
 //! - **Full OASIS Support** - Read and write `.oas` files with all element types
 //! - **Format Conversion** - Convert between GDSII and OASIS formats
+//! - **Streaming Parser** - Process large files without loading into memory
+//! - **CLI Tool** - Command-line utility for file operations
+//! - **Property Utilities** - Enhanced property management and builders
+//! - **AREF Expansion** - Array reference expansion utilities
 //! - **Zero Dependencies** - Pure Rust implementation using only `std`
 //! - **Memory Safe** - Leverages Rust's ownership system
-//! - **Production Ready** - Comprehensive test suite with 17 tests
+//! - **Production Ready** - Comprehensive test suite with 53 tests
 //!
 //! ## Quick Start
 //!
@@ -77,10 +81,19 @@
 //! - [`gdsii`] - GDSII format support
 //! - [`oasis`] - OASIS format support
 //! - [`converter`] - Format conversion utilities
+//! - [`streaming`] - Streaming parser for large files
+//! - [`properties`] - Property management utilities
+//! - [`aref_expansion`] - Array reference expansion tools
 
+pub mod aref_expansion;
 pub mod converter;
 pub mod gdsii;
 pub mod oasis;
+pub mod properties;
+pub mod streaming;
 
+pub use aref_expansion::*;
 pub use gdsii::*;
 pub use oasis::*;
+pub use properties::*;
+pub use streaming::*;
