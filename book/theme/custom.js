@@ -1,10 +1,10 @@
-// Make the book title clickable and link to the same page
+// Make the book title clickable and link to home page
 document.addEventListener('DOMContentLoaded', function() {
     const menuTitle = document.querySelector('.menu-title');
     if (menuTitle) {
-        // Wrap the title text in a link to the current page
+        // Wrap the title text in a link to the home page
         const titleText = menuTitle.textContent;
-        menuTitle.innerHTML = '<a href="' + window.location.pathname + '">' + titleText + '</a>';
+        menuTitle.innerHTML = '<a href="/">' + titleText + '</a>';
     }
     
     // Start with sidebar collapsed
