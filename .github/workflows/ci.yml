@@ -113,3 +113,45 @@ jobs:
       
       - name: Check for broken links
         run: cargo doc --no-deps --all-features 2>&1 | grep -i "warning.*intra-doc" && exit 1 || exit 0
+
+  release:
+    name: Create Release
+    needs: docs
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          if [ -f "RELEASE_NOTES_${{ steps.get_version.outputs.VERSION }}.md" ]; then
+            echo "Using existing release notes file"
+            cat "RELEASE_NOTES_${{ steps.get_version.outputs.VERSION }}.md" > release_notes.md
+          else
+            echo "Generating release notes from CHANGELOG.md"
+            echo "# GDS_OAS ${{ steps.get_version.outputs.VERSION }}" > release_notes.md
+            echo "" >> release_notes.md
+            echo "Production-ready Rust library for GDSII and OASIS IC layout file formats." >> release_notes.md
+            echo "" >> release_notes.md
+            if [ -f "CHANGELOG.md" ]; then
+              cat CHANGELOG.md >> release_notes.md
+            fi
+          fi
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ steps.get_version.outputs.VERSION }} - Production-Ready GDSII and OASIS Library
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,7 +2,7 @@
 name = "gds_oas"
 version = "0.1.0"
 edition = "2021"
-author = "Giridhar Salana"
+authors = ["Giridhar Salana <giridharsalana@gmail.com>"]
 description = "Production-ready Rust library for GDSII and OASIS IC layout file formats"
 readme = "README.md"
 repository = "https://github.com/GiridharSalana/gds_oas"

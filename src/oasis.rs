@@ -2,10 +2,10 @@
 // Full implementation of OASIS spec for IC layout interchange
 // More compact and modern than GDSII
 
-use std::io::{Read, Write, BufReader, BufWriter, Cursor};
 use std::collections::HashMap;
-use std::path::Path;
 use std::fs::File;
+use std::io::{BufReader, BufWriter, Cursor, Read, Write};
+use std::path::Path;
 
 /// OASIS File structure
 #[derive(Debug, Clone)]
@@ -222,9 +222,8 @@ mod record_ids {
     pub const CIRCLE: u8 = 24;
 }
 
-impl OASISFile {
-    /// Create a new empty OASIS file
-    pub fn new() -> Self {
+impl Default for OASISFile {
+    fn default() -> Self {
         OASISFile {
             version: "1.0".to_string(),
             unit: 1e-9, // 1nm database unit
@@ -241,6 +240,13 @@ impl OASISFile {
             properties: Vec::new(),
         }
     }
+}
+
+impl OASISFile {
+    /// Create a new empty OASIS file
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Read OASIS from file
     pub fn read_from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
@@ -253,56 +259,62 @@ impl OASISFile {
     pub fn read_from_reader<R: Read>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer)?;
-        
+
         let mut cursor = Cursor::new(buffer);
         let mut oasis = OASISFile::new();
-        
+
         // Check magic bytes
         let magic = Self::read_bytes(&mut cursor, 13)?;
         if &magic != b"%SEMI-OASIS\r\n" {
             return Err("Invalid OASIS file magic".into());
         }
-        
+
         // Parse records
         loop {
             let record_id = match Self::read_u8(&mut cursor) {
                 Ok(id) => id,
                 Err(_) => break,
             };
-            
+
             // Skip padding records
             if record_id == 0 {
                 continue;
             }
-            
+
             match record_id {
-                1 => { // START
+                1 => {
+                    // START
                     oasis.version = Self::read_string(&mut cursor)?;
                     oasis.unit = Self::read_real(&mut cursor)?;
                     oasis.offset_flag = Self::read_u8(&mut cursor)? != 0;
                 }
-                2 => { // END
+                2 => {
+                    // END
                     // Validation table follows - skip it
                     // Read validation signature (may fail if at end of file)
                     let _ = Self::read_unsigned(&mut cursor);
                     break;
                 }
-                3 => { // CELLNAME
+                3 => {
+                    // CELLNAME
                     let name = Self::read_string(&mut cursor)?;
                     let ref_num = Self::read_unsigned(&mut cursor)? as u32;
                     oasis.names.cell_names.insert(ref_num, name);
                 }
-                5 => { // TEXTSTRING
+                5 => {
+                    // TEXTSTRING
                     let string = Self::read_string(&mut cursor)?;
                     let ref_num = Self::read_unsigned(&mut cursor)? as u32;
                     oasis.names.text_strings.insert(ref_num, string);
                 }
-                7 => { // PROPNAME
+                7 => {
+                    // PROPNAME
                     let name = Self::read_string(&mut cursor)?;
                     let ref_num = Self::read_unsigned(&mut cursor)? as u32;
                     oasis.names.prop_names.insert(ref_num, name);
                 }
-                11 => { // LAYERNAME
+                11 => {
+                    // LAYERNAME
                     let name = Self::read_string(&mut cursor)?;
                     let layer_interval = Self::read_layer_interval(&mut cursor)?;
                     let _datatype_interval = Self::read_layer_interval(&mut cursor)?;
@@ -311,31 +323,32 @@ impl OASISFile {
                         oasis.names.layer_names.insert(*layer, name);
                     }
                 }
-                13 => { // CELL
+                13 => {
+                    // CELL
                     let cell = Self::read_cell(&mut cursor, &oasis.names)?;
                     oasis.cells.push(cell);
                 }
                 14 => { // XYAbsolute
-                    // Coordinate mode - no data, just skip
+                     // Coordinate mode - no data, just skip
                 }
-                15 => { // XYRelative  
-                    // Coordinate mode - no data, just skip
+                15 => { // XYRelative
+                     // Coordinate mode - no data, just skip
                 }
                 19 => { // RECTANGLE
-                    // Handled within cell context
+                     // Handled within cell context
                 }
                 20 => { // POLYGON
-                    // Handled within cell context
+                     // Handled within cell context
                 }
                 21 => { // PATH
-                    // Handled within cell context
+                     // Handled within cell context
                 }
                 _ => {
                     // Skip unknown records
                 }
             }
         }
-        
+
         Ok(oasis)
     }
 
@@ -347,68 +360,76 @@ impl OASISFile {
     }
 
     /// Write OASIS to any writer
-    pub fn write_to_writer<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write_to_writer<W: Write>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Write magic
         writer.write_all(b"%SEMI-OASIS\r\n")?;
-        
+
         // Write START record
         Self::write_u8(writer, 1)?;
         Self::write_string(writer, &self.version)?;
         Self::write_real(writer, self.unit)?;
         Self::write_u8(writer, if self.offset_flag { 1 } else { 0 })?;
-        
+
         // Write name tables
         for (ref_num, name) in &self.names.cell_names {
             Self::write_u8(writer, 3)?; // CELLNAME
             Self::write_string(writer, name)?;
             Self::write_unsigned(writer, *ref_num as u64)?;
         }
-        
+
         for (ref_num, string) in &self.names.text_strings {
             Self::write_u8(writer, 5)?; // TEXTSTRING
             Self::write_string(writer, string)?;
             Self::write_unsigned(writer, *ref_num as u64)?;
         }
-        
+
         for (ref_num, name) in &self.names.prop_names {
             Self::write_u8(writer, 7)?; // PROPNAME
             Self::write_string(writer, name)?;
             Self::write_unsigned(writer, *ref_num as u64)?;
         }
-        
+
         // Write cells
         for cell in &self.cells {
             cell.write(writer, &self.names)?;
         }
-        
+
         // Write END record
         Self::write_u8(writer, 2)?;
-        
+
         // Write validation (optional, simplified)
         Self::write_unsigned(writer, 0)?; // No validation
-        
+
         Ok(())
     }
 
-    fn read_cell(cursor: &mut Cursor<Vec<u8>>, names: &NameTable) -> Result<OASISCell, Box<dyn std::error::Error>> {
+    fn read_cell(
+        cursor: &mut Cursor<Vec<u8>>,
+        names: &NameTable,
+    ) -> Result<OASISCell, Box<dyn std::error::Error>> {
         let name_ref_or_string = Self::read_unsigned(cursor)?;
-        
+
         let name = if name_ref_or_string & 1 == 0 {
             // Reference
             let ref_num = (name_ref_or_string >> 1) as u32;
-            names.cell_names.get(&ref_num)
+            names
+                .cell_names
+                .get(&ref_num)
                 .ok_or("Cell name reference not found")?
                 .clone()
         } else {
             // Explicit string
             Self::read_string(cursor)?
         };
-        
+
         let mut cell = OASISCell {
             name,
             elements: Vec::new(),
         };
-        
+
         // Read elements until next CELL, END, or coordinate mode change
         loop {
             // Peek at next byte to see what's coming
@@ -417,27 +438,32 @@ impl OASISFile {
                 Ok(id) => id,
                 Err(_) => break, // EOF
             };
-            
+
             // Check if this is a cell boundary or end marker
             match record_id {
-                2 | 13 => { // END or CELL - restore position and break
+                2 | 13 => {
+                    // END or CELL - restore position and break
                     cursor.set_position(position);
                     break;
                 }
-                14 | 15 => { // XYAbsolute or XYRelative - just continue
+                14 | 15 => {
+                    // XYAbsolute or XYRelative - just continue
                     continue;
                 }
-                19 => { // RECTANGLE
+                19 => {
+                    // RECTANGLE
                     if let Ok(elem) = Self::read_rectangle(cursor) {
                         cell.elements.push(OASISElement::Rectangle(elem));
                     }
                 }
-                20 => { // POLYGON
+                20 => {
+                    // POLYGON
                     if let Ok(elem) = Self::read_polygon(cursor) {
                         cell.elements.push(OASISElement::Polygon(elem));
                     }
                 }
-                21 => { // PATH
+                21 => {
+                    // PATH
                     if let Ok(elem) = Self::read_path(cursor) {
                         cell.elements.push(OASISElement::Path(elem));
                     }
@@ -449,11 +475,13 @@ impl OASISFile {
                 }
             }
         }
-        
+
         Ok(cell)
     }
-    
-    fn read_rectangle(cursor: &mut Cursor<Vec<u8>>) -> Result<Rectangle, Box<dyn std::error::Error>> {
+
+    fn read_rectangle(
+        cursor: &mut Cursor<Vec<u8>>,
+    ) -> Result<Rectangle, Box<dyn std::error::Error>> {
         let _info_byte = Self::read_u8(cursor)?;
         let layer = Self::read_unsigned(cursor)? as u32;
         let datatype = Self::read_unsigned(cursor)? as u32;
@@ -461,7 +489,7 @@ impl OASISFile {
         let height = Self::read_unsigned(cursor)?;
         let x = Self::read_signed(cursor)?;
         let y = Self::read_signed(cursor)?;
-        
+
         Ok(Rectangle {
             layer,
             datatype,
@@ -473,23 +501,23 @@ impl OASISFile {
             properties: Vec::new(),
         })
     }
-    
+
     fn read_polygon(cursor: &mut Cursor<Vec<u8>>) -> Result<Polygon, Box<dyn std::error::Error>> {
         let _info_byte = Self::read_u8(cursor)?;
         let layer = Self::read_unsigned(cursor)? as u32;
         let datatype = Self::read_unsigned(cursor)? as u32;
         let point_count = Self::read_unsigned(cursor)? as usize;
-        
+
         let mut points = Vec::new();
         for _ in 0..point_count {
             let x = Self::read_signed(cursor)?;
             let y = Self::read_signed(cursor)?;
             points.push((x, y));
         }
-        
+
         let x = Self::read_signed(cursor)?;
         let y = Self::read_signed(cursor)?;
-        
+
         Ok(Polygon {
             layer,
             datatype,
@@ -500,13 +528,13 @@ impl OASISFile {
             properties: Vec::new(),
         })
     }
-    
+
     fn read_path(cursor: &mut Cursor<Vec<u8>>) -> Result<OPath, Box<dyn std::error::Error>> {
         let _info_byte = Self::read_u8(cursor)?;
         let layer = Self::read_unsigned(cursor)? as u32;
         let datatype = Self::read_unsigned(cursor)? as u32;
         let half_width = Self::read_unsigned(cursor)?;
-        
+
         let ext_scheme_type = Self::read_u8(cursor)?;
         let extension_scheme = match ext_scheme_type {
             0 => ExtensionScheme::Flush,
@@ -518,7 +546,7 @@ impl OASISFile {
             }
             _ => ExtensionScheme::Flush,
         };
-        
+
         let point_count = Self::read_unsigned(cursor)? as usize;
         let mut points = Vec::new();
         for _ in 0..point_count {
@@ -526,10 +554,10 @@ impl OASISFile {
             let y = Self::read_signed(cursor)?;
             points.push((x, y));
         }
-        
+
         let x = Self::read_signed(cursor)?;
         let y = Self::read_signed(cursor)?;
-        
+
         Ok(OPath {
             layer,
             datatype,
@@ -555,7 +583,10 @@ impl OASISFile {
         Ok(())
     }
 
-    fn read_bytes<R: Read>(cursor: &mut R, len: usize) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn read_bytes<R: Read>(
+        cursor: &mut R,
+        len: usize,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let mut buf = vec![0u8; len];
         cursor.read_exact(&mut buf)?;
         Ok(buf)
@@ -565,31 +596,34 @@ impl OASISFile {
         // Variable-length unsigned integer encoding
         let mut result = 0u64;
         let mut shift = 0;
-        
+
         loop {
             let byte = Self::read_u8(cursor)?;
             result |= ((byte & 0x7F) as u64) << shift;
-            
+
             if byte & 0x80 == 0 {
                 break;
             }
             shift += 7;
         }
-        
+
         Ok(result)
     }
 
-    fn write_unsigned<W: Write>(writer: &mut W, mut value: u64) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_unsigned<W: Write>(
+        writer: &mut W,
+        mut value: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         loop {
             let mut byte = (value & 0x7F) as u8;
             value >>= 7;
-            
+
             if value != 0 {
                 byte |= 0x80;
             }
-            
+
             Self::write_u8(writer, byte)?;
-            
+
             if value == 0 {
                 break;
             }
@@ -599,25 +633,28 @@ impl OASISFile {
 
     fn read_signed<R: Read>(cursor: &mut R) -> Result<i64, Box<dyn std::error::Error>> {
         let unsigned = Self::read_unsigned(cursor)?;
-        
+
         // Zigzag decoding
         let signed = if unsigned & 1 == 0 {
             (unsigned >> 1) as i64
         } else {
             -((unsigned >> 1) as i64) - 1
         };
-        
+
         Ok(signed)
     }
 
-    fn write_signed<W: Write>(writer: &mut W, value: i64) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_signed<W: Write>(
+        writer: &mut W,
+        value: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Zigzag encoding
         let unsigned = if value >= 0 {
             (value as u64) << 1
         } else {
             (((-value - 1) as u64) << 1) | 1
         };
-        
+
         Self::write_unsigned(writer, unsigned)
     }
 
@@ -635,7 +672,7 @@ impl OASISFile {
 
     fn read_real<R: Read>(cursor: &mut R) -> Result<f64, Box<dyn std::error::Error>> {
         let type_byte = Self::read_u8(cursor)?;
-        
+
         match type_byte {
             0 => Ok(0.0),
             1 => Ok(1.0),
@@ -680,9 +717,11 @@ impl OASISFile {
         Ok(())
     }
 
-    fn read_layer_interval<R: Read>(cursor: &mut R) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+    fn read_layer_interval<R: Read>(
+        cursor: &mut R,
+    ) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
         let type_byte = Self::read_u8(cursor)?;
-        
+
         match type_byte {
             0 => {
                 let value = Self::read_unsigned(cursor)? as u32;
@@ -707,37 +746,47 @@ impl OASISFile {
 }
 
 impl OASISCell {
-    fn write<W: Write>(&self, writer: &mut W, names: &NameTable) -> Result<(), Box<dyn std::error::Error>> {
+    fn write<W: Write>(
+        &self,
+        writer: &mut W,
+        names: &NameTable,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Write CELL record (type 13 or 14)
         // For simplicity, use type 14 which includes explicit placement
         OASISFile::write_u8(writer, 14)?; // XYAbsolute - sets coordinate mode
-        
+
         // Write CELL record
         OASISFile::write_u8(writer, 13)?;
-        
+
         // Write cell name (using reference if available)
-        let name_ref = names.cell_names.iter()
+        let name_ref = names
+            .cell_names
+            .iter()
             .find(|(_, n)| n.as_str() == self.name)
             .map(|(r, _)| *r);
-        
+
         if let Some(ref_num) = name_ref {
             OASISFile::write_unsigned(writer, (ref_num as u64) << 1)?;
         } else {
             OASISFile::write_unsigned(writer, 1)?;
             OASISFile::write_string(writer, &self.name)?;
         }
-        
+
         // Write elements
         for element in &self.elements {
             element.write(writer, names)?;
         }
-        
+
         Ok(())
     }
 }
 
 impl OASISElement {
-    fn write<W: Write>(&self, writer: &mut W, names: &NameTable) -> Result<(), Box<dyn std::error::Error>> {
+    fn write<W: Write>(
+        &self,
+        writer: &mut W,
+        names: &NameTable,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             OASISElement::Rectangle(r) => r.write(writer),
             OASISElement::Polygon(p) => p.write(writer),
@@ -772,12 +821,12 @@ impl Polygon {
         OASISFile::write_unsigned(writer, self.layer as u64)?;
         OASISFile::write_unsigned(writer, self.datatype as u64)?;
         OASISFile::write_unsigned(writer, self.points.len() as u64)?;
-        
+
         for (x, y) in &self.points {
             OASISFile::write_signed(writer, *x)?;
             OASISFile::write_signed(writer, *y)?;
         }
-        
+
         OASISFile::write_signed(writer, self.x)?;
         OASISFile::write_signed(writer, self.y)?;
         Ok(())
@@ -791,7 +840,7 @@ impl OPath {
         OASISFile::write_unsigned(writer, self.layer as u64)?;
         OASISFile::write_unsigned(writer, self.datatype as u64)?;
         OASISFile::write_unsigned(writer, self.half_width)?;
-        
+
         // Extension scheme
         match &self.extension_scheme {
             ExtensionScheme::Flush => OASISFile::write_u8(writer, 0)?,
@@ -802,13 +851,13 @@ impl OPath {
                 OASISFile::write_signed(writer, *end)?;
             }
         }
-        
+
         OASISFile::write_unsigned(writer, self.points.len() as u64)?;
         for (x, y) in &self.points {
             OASISFile::write_signed(writer, *x)?;
             OASISFile::write_signed(writer, *y)?;
         }
-        
+
         OASISFile::write_signed(writer, self.x)?;
         OASISFile::write_signed(writer, self.y)?;
         Ok(())
@@ -858,7 +907,11 @@ impl Circle {
 }
 
 impl OText {
-    fn write<W: Write>(&self, writer: &mut W, _names: &NameTable) -> Result<(), Box<dyn std::error::Error>> {
+    fn write<W: Write>(
+        &self,
+        writer: &mut W,
+        _names: &NameTable,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         OASISFile::write_u8(writer, 18)?; // TEXT
         OASISFile::write_unsigned(writer, self.layer as u64)?;
         OASISFile::write_unsigned(writer, self.texttype as u64)?;
@@ -870,7 +923,11 @@ impl OText {
 }
 
 impl Placement {
-    fn write<W: Write>(&self, writer: &mut W, _names: &NameTable) -> Result<(), Box<dyn std::error::Error>> {
+    fn write<W: Write>(
+        &self,
+        writer: &mut W,
+        _names: &NameTable,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         OASISFile::write_u8(writer, 16)?; // PLACEMENT
         OASISFile::write_string(writer, &self.cell_name)?;
         OASISFile::write_signed(writer, self.x)?;
@@ -888,12 +945,12 @@ mod tests {
     fn test_oasis_create_simple() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "SIMPLE".to_string());
-        
+
         let mut cell = OASISCell {
             name: "SIMPLE".to_string(),
             elements: Vec::new(),
         };
-        
+
         cell.elements.push(OASISElement::Rectangle(Rectangle {
             layer: 1,
             datatype: 0,
@@ -904,9 +961,9 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         oasis.cells.push(cell);
-        
+
         assert!(oasis.write_to_file("test_oasis_simple.oas").is_ok());
         std::fs::remove_file("test_oasis_simple.oas").ok();
     }
@@ -915,12 +972,12 @@ mod tests {
     fn test_oasis_round_trip_rectangles() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "RECT_CELL".to_string());
-        
+
         let mut cell = OASISCell {
             name: "RECT_CELL".to_string(),
             elements: Vec::new(),
         };
-        
+
         // Add multiple rectangles
         for i in 0..3 {
             cell.elements.push(OASISElement::Rectangle(Rectangle {
@@ -934,17 +991,17 @@ mod tests {
                 properties: Vec::new(),
             }));
         }
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_rects.oas").unwrap();
-        
+
         // Read back
         let oasis_read = OASISFile::read_from_file("test_oasis_rects.oas").unwrap();
-        
+
         assert_eq!(oasis_read.cells.len(), 1);
         assert_eq!(oasis_read.cells[0].name, "RECT_CELL");
         assert_eq!(oasis_read.cells[0].elements.len(), 3);
-        
+
         // Verify each rectangle
         for (i, element) in oasis_read.cells[0].elements.iter().enumerate() {
             if let OASISElement::Rectangle(rect) = element {
@@ -955,7 +1012,7 @@ mod tests {
                 panic!("Expected Rectangle");
             }
         }
-        
+
         std::fs::remove_file("test_oasis_rects.oas").ok();
     }
 
@@ -963,12 +1020,12 @@ mod tests {
     fn test_oasis_polygon_round_trip() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "POLY_CELL".to_string());
-        
+
         let mut cell = OASISCell {
             name: "POLY_CELL".to_string(),
             elements: Vec::new(),
         };
-        
+
         // Triangle
         cell.elements.push(OASISElement::Polygon(Polygon {
             layer: 2,
@@ -979,12 +1036,12 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_poly.oas").unwrap();
-        
+
         let oasis_read = OASISFile::read_from_file("test_oasis_poly.oas").unwrap();
-        
+
         if let OASISElement::Polygon(poly) = &oasis_read.cells[0].elements[0] {
             assert_eq!(poly.layer, 2);
             assert_eq!(poly.x, 1000);
@@ -995,7 +1052,7 @@ mod tests {
         } else {
             panic!("Expected Polygon");
         }
-        
+
         std::fs::remove_file("test_oasis_poly.oas").ok();
     }
 
@@ -1003,12 +1060,12 @@ mod tests {
     fn test_oasis_path_round_trip() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "PATH_CELL".to_string());
-        
+
         let mut cell = OASISCell {
             name: "PATH_CELL".to_string(),
             elements: Vec::new(),
         };
-        
+
         cell.elements.push(OASISElement::Path(OPath {
             layer: 5,
             datatype: 1,
@@ -1020,12 +1077,12 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_path.oas").unwrap();
-        
+
         let oasis_read = OASISFile::read_from_file("test_oasis_path.oas").unwrap();
-        
+
         if let OASISElement::Path(path) = &oasis_read.cells[0].elements[0] {
             assert_eq!(path.layer, 5);
             assert_eq!(path.datatype, 1);
@@ -1036,7 +1093,7 @@ mod tests {
         } else {
             panic!("Expected Path");
         }
-        
+
         std::fs::remove_file("test_oasis_path.oas").ok();
     }
 
@@ -1044,12 +1101,12 @@ mod tests {
     fn test_oasis_mixed_elements() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "MIXED".to_string());
-        
+
         let mut cell = OASISCell {
             name: "MIXED".to_string(),
             elements: Vec::new(),
         };
-        
+
         // Add one of each type
         cell.elements.push(OASISElement::Rectangle(Rectangle {
             layer: 1,
@@ -1061,7 +1118,7 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         cell.elements.push(OASISElement::Polygon(Polygon {
             layer: 2,
             datatype: 0,
@@ -1071,7 +1128,7 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         cell.elements.push(OASISElement::Path(OPath {
             layer: 3,
             datatype: 0,
@@ -1083,19 +1140,28 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_mixed.oas").unwrap();
-        
+
         let oasis_read = OASISFile::read_from_file("test_oasis_mixed.oas").unwrap();
-        
+
         assert_eq!(oasis_read.cells[0].elements.len(), 3);
-        
+
         // Verify types in order
-        assert!(matches!(oasis_read.cells[0].elements[0], OASISElement::Rectangle(_)));
-        assert!(matches!(oasis_read.cells[0].elements[1], OASISElement::Polygon(_)));
-        assert!(matches!(oasis_read.cells[0].elements[2], OASISElement::Path(_)));
-        
+        assert!(matches!(
+            oasis_read.cells[0].elements[0],
+            OASISElement::Rectangle(_)
+        ));
+        assert!(matches!(
+            oasis_read.cells[0].elements[1],
+            OASISElement::Polygon(_)
+        ));
+        assert!(matches!(
+            oasis_read.cells[0].elements[2],
+            OASISElement::Path(_)
+        ));
+
         std::fs::remove_file("test_oasis_mixed.oas").ok();
     }
 
@@ -1103,19 +1169,19 @@ mod tests {
     fn test_oasis_empty_cell() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "EMPTY".to_string());
-        
+
         let cell = OASISCell {
             name: "EMPTY".to_string(),
             elements: Vec::new(),
         };
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_empty.oas").unwrap();
-        
+
         let oasis_read = OASISFile::read_from_file("test_oasis_empty.oas").unwrap();
         assert_eq!(oasis_read.cells.len(), 1);
         assert_eq!(oasis_read.cells[0].elements.len(), 0);
-        
+
         std::fs::remove_file("test_oasis_empty.oas").ok();
     }
 
@@ -1123,12 +1189,12 @@ mod tests {
     fn test_oasis_large_coordinates() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "LARGE".to_string());
-        
+
         let mut cell = OASISCell {
             name: "LARGE".to_string(),
             elements: Vec::new(),
         };
-        
+
         // Test with large coordinate values
         cell.elements.push(OASISElement::Rectangle(Rectangle {
             layer: 1,
@@ -1140,12 +1206,12 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_large.oas").unwrap();
-        
+
         let oasis_read = OASISFile::read_from_file("test_oasis_large.oas").unwrap();
-        
+
         if let OASISElement::Rectangle(rect) = &oasis_read.cells[0].elements[0] {
             assert_eq!(rect.x, 1_000_000);
             assert_eq!(rect.y, 2_000_000);
@@ -1154,7 +1220,7 @@ mod tests {
         } else {
             panic!("Expected Rectangle");
         }
-        
+
         std::fs::remove_file("test_oasis_large.oas").ok();
     }
 
@@ -1162,12 +1228,12 @@ mod tests {
     fn test_oasis_negative_coordinates() {
         let mut oasis = OASISFile::new();
         oasis.names.cell_names.insert(0, "NEGATIVE".to_string());
-        
+
         let mut cell = OASISCell {
             name: "NEGATIVE".to_string(),
             elements: Vec::new(),
         };
-        
+
         // Test with negative coordinates
         cell.elements.push(OASISElement::Rectangle(Rectangle {
             layer: 1,
@@ -1179,19 +1245,19 @@ mod tests {
             repetition: None,
             properties: Vec::new(),
         }));
-        
+
         oasis.cells.push(cell);
         oasis.write_to_file("test_oasis_neg.oas").unwrap();
-        
+
         let oasis_read = OASISFile::read_from_file("test_oasis_neg.oas").unwrap();
-        
+
         if let OASISElement::Rectangle(rect) = &oasis_read.cells[0].elements[0] {
             assert_eq!(rect.x, -100);
             assert_eq!(rect.y, -200);
         } else {
             panic!("Expected Rectangle");
         }
-        
+
         std::fs::remove_file("test_oasis_neg.oas").ok();
     }
 }

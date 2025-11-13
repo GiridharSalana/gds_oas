@@ -2,9 +2,9 @@
 // Industry standard format for IC layout interchange
 // Binary format with record-based structure
 
-use std::io::{Read, Write, BufReader, BufWriter};
-use std::path::Path;
 use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 
 /// GDSII File structure
 #[derive(Debug, Clone)]
@@ -189,12 +189,12 @@ impl GDSIIFile {
     pub fn read_from_reader<R: Read>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer)?;
-        
+
         let mut cursor = 0;
         let mut gds = GDSIIFile::new(String::new());
         let mut current_structure: Option<GDSStructure> = None;
         let mut current_element: Option<GDSElement> = None;
-        
+
         // Temporary storage for element construction
         let mut layer: Option<i16> = None;
         let mut datatype: Option<i16> = None;
@@ -210,29 +210,35 @@ impl GDSIIFile {
         let mut colrow: Option<(u16, u16)> = None;
         let mut nodetype: Option<i16> = None;
         let mut boxtype: Option<i16> = None;
-        
+
         while cursor < buffer.len() {
             let (record_type, _data_type, data) = Self::read_record(&buffer, &mut cursor)?;
-            
+
             match record_type {
-                0x00 => { // HEADER
+                0x00 => {
+                    // HEADER
                     gds.version = Self::parse_i16(&data)? as u16;
                 }
-                0x01 => { // BGNLIB
+                0x01 => {
+                    // BGNLIB
                     let times = Self::parse_time(&data)?;
                     gds.modification_time = times.0;
                     gds.access_time = times.1;
                 }
-                0x02 => { // LIBNAME
+                0x02 => {
+                    // LIBNAME
                     gds.library_name = Self::parse_string(&data)?;
                 }
-                0x03 => { // UNITS
+                0x03 => {
+                    // UNITS
                     gds.units = Self::parse_units(&data)?;
                 }
-                0x04 => { // ENDLIB
+                0x04 => {
+                    // ENDLIB
                     break;
                 }
-                0x05 => { // BGNSTR
+                0x05 => {
+                    // BGNSTR
                     let times = Self::parse_time(&data)?;
                     current_structure = Some(GDSStructure {
                         name: String::new(),
@@ -241,23 +247,27 @@ impl GDSIIFile {
                         elements: Vec::new(),
                     });
                 }
-                0x06 => { // STRNAME
+                0x06 => {
+                    // STRNAME
                     if let Some(ref mut structure) = current_structure {
                         structure.name = Self::parse_string(&data)?;
                     }
                 }
-                0x07 => { // ENDSTR
+                0x07 => {
+                    // ENDSTR
                     if let Some(structure) = current_structure.take() {
                         gds.structures.push(structure);
                     }
                 }
-                0x08 => { // BOUNDARY
+                0x08 => {
+                    // BOUNDARY
                     layer = None;
                     datatype = None;
                     xy.clear();
                     properties.clear();
                 }
-                0x09 => { // PATH
+                0x09 => {
+                    // PATH
                     layer = None;
                     datatype = None;
                     xy.clear();
@@ -265,20 +275,23 @@ impl GDSIIFile {
                     width = None;
                     pathtype = None;
                 }
-                0x0A => { // SREF
+                0x0A => {
+                    // SREF
                     sname = None;
                     xy.clear();
                     strans = None;
                     properties.clear();
                 }
-                0x0B => { // AREF
+                0x0B => {
+                    // AREF
                     sname = None;
                     xy.clear();
                     strans = None;
                     colrow = None;
                     properties.clear();
                 }
-                0x0C => { // TEXT
+                0x0C => {
+                    // TEXT
                     layer = None;
                     texttype = None;
                     xy.clear();
@@ -288,97 +301,112 @@ impl GDSIIFile {
                     width = None;
                     properties.clear();
                 }
-                0x0D => { // LAYER
+                0x0D => {
+                    // LAYER
                     layer = Some(Self::parse_i16(&data)?);
                 }
-                0x0E => { // DATATYPE
+                0x0E => {
+                    // DATATYPE
                     datatype = Some(Self::parse_i16(&data)?);
                 }
-                0x0F => { // WIDTH
+                0x0F => {
+                    // WIDTH
                     width = Some(Self::parse_i32(&data)?);
                 }
-                0x10 => { // XY
+                0x10 => {
+                    // XY
                     xy = Self::parse_xy(&data)?;
                 }
-                0x11 => { // ENDEL
+                0x11 => {
+                    // ENDEL
                     // Finalize current element
                     let _element = current_element.take();
-                    
+
                     // Or create element based on what we're building
-                    let new_element = if layer.is_some() && datatype.is_some() && !xy.is_empty() {
-                        // Could be BOUNDARY
-                        Some(GDSElement::Boundary(Boundary {
-                            layer: layer.unwrap(),
-                            datatype: datatype.unwrap(),
-                            xy: xy.clone(),
-                            properties: properties.clone(),
-                        }))
-                    } else if layer.is_some() && datatype.is_some() && pathtype.is_some() {
-                        // PATH
-                        Some(GDSElement::Path(GPath {
-                            layer: layer.unwrap(),
-                            datatype: datatype.unwrap(),
-                            pathtype: pathtype.unwrap(),
-                            width,
-                            xy: xy.clone(),
-                            properties: properties.clone(),
-                        }))
-                    } else if sname.is_some() && colrow.is_some() {
+                    let new_element = if let (Some(l), Some(d)) = (layer, datatype) {
+                        if !xy.is_empty() {
+                            // Could be BOUNDARY
+                            Some(GDSElement::Boundary(Boundary {
+                                layer: l,
+                                datatype: d,
+                                xy: xy.clone(),
+                                properties: properties.clone(),
+                            }))
+                        } else {
+                            // PATH
+                            pathtype.map(|pt| {
+                                GDSElement::Path(GPath {
+                                    layer: l,
+                                    datatype: d,
+                                    pathtype: pt,
+                                    width,
+                                    xy: xy.clone(),
+                                    properties: properties.clone(),
+                                })
+                            })
+                        }
+                    } else if let (Some(sn), Some(cr)) = (sname.as_ref(), colrow) {
                         // AREF
                         Some(GDSElement::ArrayRef(ArrayRef {
-                            sname: sname.clone().unwrap(),
-                            columns: colrow.unwrap().0,
-                            rows: colrow.unwrap().1,
+                            sname: sn.clone(),
+                            columns: cr.0,
+                            rows: cr.1,
                             xy: xy.clone(),
                             strans: strans.clone(),
                             properties: properties.clone(),
                         }))
-                    } else if sname.is_some() && !xy.is_empty() {
-                        // SREF
-                        Some(GDSElement::StructRef(StructRef {
-                            sname: sname.clone().unwrap(),
-                            xy: xy[0],
-                            strans: strans.clone(),
-                            properties: properties.clone(),
-                        }))
-                    } else if layer.is_some() && texttype.is_some() && text_string.is_some() {
+                    } else if let Some(sn) = sname.as_ref() {
+                        if !xy.is_empty() {
+                            // SREF
+                            Some(GDSElement::StructRef(StructRef {
+                                sname: sn.clone(),
+                                xy: xy[0],
+                                strans: strans.clone(),
+                                properties: properties.clone(),
+                            }))
+                        } else {
+                            None
+                        }
+                    } else if let (Some(l), Some(tt), Some(ts)) =
+                        (layer, texttype, text_string.as_ref())
+                    {
                         // TEXT
                         Some(GDSElement::Text(GText {
-                            layer: layer.unwrap(),
-                            texttype: texttype.unwrap(),
-                            string: text_string.clone().unwrap(),
+                            layer: l,
+                            texttype: tt,
+                            string: ts.clone(),
                             xy: if !xy.is_empty() { xy[0] } else { (0, 0) },
                             presentation,
                             strans: strans.clone(),
                             width,
                             properties: properties.clone(),
                         }))
-                    } else if layer.is_some() && nodetype.is_some() {
+                    } else if let (Some(l), Some(nt)) = (layer, nodetype) {
                         // NODE
                         Some(GDSElement::Node(Node {
-                            layer: layer.unwrap(),
-                            nodetype: nodetype.unwrap(),
+                            layer: l,
+                            nodetype: nt,
                             xy: xy.clone(),
                             properties: properties.clone(),
                         }))
-                    } else if layer.is_some() && boxtype.is_some() {
+                    } else if let (Some(l), Some(bt)) = (layer, boxtype) {
                         // BOX
                         Some(GDSElement::Box(GDSBox {
-                            layer: layer.unwrap(),
-                            boxtype: boxtype.unwrap(),
+                            layer: l,
+                            boxtype: bt,
                             xy: xy.clone(),
                             properties: properties.clone(),
                         }))
                     } else {
                         None
                     };
-                    
+
                     if let Some(elem) = new_element {
                         if let Some(ref mut structure) = current_structure {
                             structure.elements.push(elem);
                         }
                     }
-                    
+
                     // Reset temporary storage
                     layer = None;
                     datatype = None;
@@ -395,30 +423,37 @@ impl GDSIIFile {
                     nodetype = None;
                     boxtype = None;
                 }
-                0x12 => { // SNAME
+                0x12 => {
+                    // SNAME
                     sname = Some(Self::parse_string(&data)?);
                 }
-                0x13 => { // COLROW
+                0x13 => {
+                    // COLROW
                     let cols = i16::from_be_bytes([data[0], data[1]]) as u16;
                     let rows = i16::from_be_bytes([data[2], data[3]]) as u16;
                     colrow = Some((cols, rows));
                 }
-                0x15 => { // NODE
+                0x15 => {
+                    // NODE
                     layer = None;
                     nodetype = None;
                     xy.clear();
                     properties.clear();
                 }
-                0x16 => { // TEXTTYPE
+                0x16 => {
+                    // TEXTTYPE
                     texttype = Some(Self::parse_i16(&data)?);
                 }
-                0x17 => { // PRESENTATION
+                0x17 => {
+                    // PRESENTATION
                     presentation = Some(Self::parse_i16(&data)?);
                 }
-                0x19 => { // STRING
+                0x19 => {
+                    // STRING
                     text_string = Some(Self::parse_string(&data)?);
                 }
-                0x1A => { // STRANS
+                0x1A => {
+                    // STRANS
                     let flags = i16::from_be_bytes([data[0], data[1]]);
                     strans = Some(STrans {
                         reflection: (flags & -0x8000_i16) != 0,
@@ -428,37 +463,43 @@ impl GDSIIFile {
                         angle: None,
                     });
                 }
-                0x1B => { // MAG
+                0x1B => {
+                    // MAG
                     let mag = Self::parse_real8(&data)?;
                     if let Some(ref mut st) = strans {
                         st.magnification = Some(mag);
                     }
                 }
-                0x1C => { // ANGLE
+                0x1C => {
+                    // ANGLE
                     let ang = Self::parse_real8(&data)?;
                     if let Some(ref mut st) = strans {
                         st.angle = Some(ang);
                     }
                 }
-                0x21 => { // PATHTYPE
+                0x21 => {
+                    // PATHTYPE
                     pathtype = Some(Self::parse_i16(&data)?);
                 }
-                0x2A => { // NODETYPE
+                0x2A => {
+                    // NODETYPE
                     nodetype = Some(Self::parse_i16(&data)?);
                 }
                 0x2B => { // PROPATTR
-                    // Property attribute - next PROPVALUE will have the value
+                     // Property attribute - next PROPVALUE will have the value
                 }
                 0x2C => { // PROPVALUE
-                    // Property value - would need to pair with PROPATTR
+                     // Property value - would need to pair with PROPATTR
                 }
-                0x2D => { // BOX
+                0x2D => {
+                    // BOX
                     layer = None;
                     boxtype = None;
                     xy.clear();
                     properties.clear();
                 }
-                0x2E => { // BOXTYPE
+                0x2E => {
+                    // BOXTYPE
                     boxtype = Some(Self::parse_i16(&data)?);
                 }
                 _ => {
@@ -466,7 +507,7 @@ impl GDSIIFile {
                 }
             }
         }
-        
+
         Ok(gds)
     }
 
@@ -478,44 +519,60 @@ impl GDSIIFile {
     }
 
     /// Write GDSII to any writer
-    pub fn write_to_writer<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write_to_writer<W: Write>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // HEADER
-        Self::write_record(writer, 0x00, DataType::TwoByteSignedInt, &self.version.to_be_bytes())?;
-        
+        Self::write_record(
+            writer,
+            0x00,
+            DataType::TwoByteSignedInt,
+            &self.version.to_be_bytes(),
+        )?;
+
         // BGNLIB
         let time_data = Self::format_times(&self.modification_time, &self.access_time);
         Self::write_record(writer, 0x01, DataType::TwoByteSignedInt, &time_data)?;
-        
+
         // LIBNAME
-        Self::write_record(writer, 0x02, DataType::AsciiString, self.library_name.as_bytes())?;
-        
+        Self::write_record(
+            writer,
+            0x02,
+            DataType::AsciiString,
+            self.library_name.as_bytes(),
+        )?;
+
         // UNITS
         let mut units_data = Vec::new();
         units_data.extend_from_slice(&Self::format_real8(self.units.0));
         units_data.extend_from_slice(&Self::format_real8(self.units.1));
         Self::write_record(writer, 0x03, DataType::EightByteReal, &units_data)?;
-        
+
         // Write structures
         for structure in &self.structures {
             structure.write(writer)?;
         }
-        
+
         // ENDLIB
         Self::write_record(writer, 0x04, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 
     // Helper functions for reading records
-    fn read_record(buffer: &[u8], cursor: &mut usize) -> Result<(u8, DataType, Vec<u8>), Box<dyn std::error::Error>> {
+    fn read_record(
+        buffer: &[u8],
+        cursor: &mut usize,
+    ) -> Result<(u8, DataType, Vec<u8>), Box<dyn std::error::Error>> {
         if *cursor + 4 > buffer.len() {
             return Err("Incomplete record header".into());
         }
-        
+
         let length = u16::from_be_bytes([buffer[*cursor], buffer[*cursor + 1]]) as usize;
         let record_type = buffer[*cursor + 2];
         let data_type_byte = buffer[*cursor + 3];
-        
+
         let data_type = match data_type_byte {
             0 => DataType::NoData,
             1 => DataType::BitArray,
@@ -526,21 +583,26 @@ impl GDSIIFile {
             6 => DataType::AsciiString,
             _ => return Err(format!("Unknown data type: {}", data_type_byte).into()),
         };
-        
+
         *cursor += 4;
-        
+
         let data_length = if length >= 4 { length - 4 } else { 0 };
         if *cursor + data_length > buffer.len() {
             return Err("Incomplete record data".into());
         }
-        
+
         let data = buffer[*cursor..*cursor + data_length].to_vec();
         *cursor += data_length;
-        
+
         Ok((record_type, data_type, data))
     }
 
-    fn write_record<W: Write>(writer: &mut W, record_type: u8, data_type: DataType, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_record<W: Write>(
+        writer: &mut W,
+        record_type: u8,
+        data_type: DataType,
+        data: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let length = (4 + data.len()) as u16;
         writer.write_all(&length.to_be_bytes())?;
         writer.write_all(&[record_type, data_type as u8])?;
@@ -573,15 +635,21 @@ impl GDSIIFile {
         if data.len() < 8 {
             return Err("Insufficient data for real8".into());
         }
-        
+
         // GDSII real8 format: sign(1bit) + exponent(7bits) + mantissa(56bits)
-        let bytes = [data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]];
+        let bytes = [
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ];
         let bits = u64::from_be_bytes(bytes);
-        
-        let sign = if (bits & 0x8000000000000000) != 0 { -1.0 } else { 1.0 };
+
+        let sign = if (bits & 0x8000000000000000) != 0 {
+            -1.0
+        } else {
+            1.0
+        };
         let exponent = ((bits >> 56) & 0x7F) as i32 - 64;
         let mantissa = (bits & 0x00FFFFFFFFFFFFFF) as f64 / (1u64 << 56) as f64;
-        
+
         Ok(sign * mantissa * 16f64.powi(exponent))
     }
 
@@ -589,21 +657,21 @@ impl GDSIIFile {
         if value == 0.0 {
             return [0; 8];
         }
-        
+
         let sign_bit = if value < 0.0 { 0x80 } else { 0x00 };
         let abs_value = value.abs();
-        
+
         // Convert to base-16 exponent
         let exponent = (abs_value.log2() / 4.0).floor() as i32;
         let mantissa = abs_value / 16f64.powi(exponent);
-        
+
         let exp_byte = ((exponent + 64) as u8) | sign_bit;
         let mant_bits = (mantissa * (1u64 << 56) as f64) as u64;
-        
+
         let mut result = [0u8; 8];
         result[0] = exp_byte;
         result[1..8].copy_from_slice(&mant_bits.to_be_bytes()[1..8]);
-        
+
         result
     }
 
@@ -611,7 +679,7 @@ impl GDSIIFile {
         if data.len() < 24 {
             return Err("Insufficient data for time".into());
         }
-        
+
         let mod_time = GDSTime {
             year: i16::from_be_bytes([data[0], data[1]]) as u16,
             month: i16::from_be_bytes([data[2], data[3]]) as u16,
@@ -620,7 +688,7 @@ impl GDSIIFile {
             minute: i16::from_be_bytes([data[8], data[9]]) as u16,
             second: i16::from_be_bytes([data[10], data[11]]) as u16,
         };
-        
+
         let acc_time = GDSTime {
             year: i16::from_be_bytes([data[12], data[13]]) as u16,
             month: i16::from_be_bytes([data[14], data[15]]) as u16,
@@ -629,7 +697,7 @@ impl GDSIIFile {
             minute: i16::from_be_bytes([data[20], data[21]]) as u16,
             second: i16::from_be_bytes([data[22], data[23]]) as u16,
         };
-        
+
         Ok((mod_time, acc_time))
     }
 
@@ -654,14 +722,14 @@ impl GDSIIFile {
         if data.len() % 8 != 0 {
             return Err("Invalid XY data length".into());
         }
-        
+
         let mut points = Vec::new();
         for i in (0..data.len()).step_by(8) {
-            let x = i32::from_be_bytes([data[i], data[i+1], data[i+2], data[i+3]]);
-            let y = i32::from_be_bytes([data[i+4], data[i+5], data[i+6], data[i+7]]);
+            let x = i32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]);
+            let y = i32::from_be_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]);
             points.push((x, y));
         }
-        
+
         Ok(points)
     }
 
@@ -669,10 +737,10 @@ impl GDSIIFile {
         if data.len() < 16 {
             return Err("Insufficient data for units".into());
         }
-        
+
         let user_units = Self::parse_real8(&data[0..8])?;
         let db_units = Self::parse_real8(&data[8..16])?;
-        
+
         Ok((user_units, db_units))
     }
 }
@@ -707,18 +775,18 @@ impl GDSStructure {
         // BGNSTR
         let time_data = GDSIIFile::format_times(&self.creation_time, &self.modification_time);
         GDSIIFile::write_record(writer, 0x05, DataType::TwoByteSignedInt, &time_data)?;
-        
+
         // STRNAME
         GDSIIFile::write_record(writer, 0x06, DataType::AsciiString, self.name.as_bytes())?;
-        
+
         // Write elements
         for element in &self.elements {
             element.write(writer)?;
         }
-        
+
         // ENDSTR
         GDSIIFile::write_record(writer, 0x07, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -741,13 +809,23 @@ impl Boundary {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // BOUNDARY
         GDSIIFile::write_record(writer, 0x08, DataType::NoData, &[])?;
-        
+
         // LAYER
-        GDSIIFile::write_record(writer, 0x0D, DataType::TwoByteSignedInt, &self.layer.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0D,
+            DataType::TwoByteSignedInt,
+            &self.layer.to_be_bytes(),
+        )?;
+
         // DATATYPE
-        GDSIIFile::write_record(writer, 0x0E, DataType::TwoByteSignedInt, &self.datatype.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0E,
+            DataType::TwoByteSignedInt,
+            &self.datatype.to_be_bytes(),
+        )?;
+
         // XY
         let mut xy_data = Vec::new();
         for (x, y) in &self.xy {
@@ -755,10 +833,10 @@ impl Boundary {
             xy_data.extend_from_slice(&y.to_be_bytes());
         }
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -767,21 +845,36 @@ impl GPath {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // PATH
         GDSIIFile::write_record(writer, 0x09, DataType::NoData, &[])?;
-        
+
         // LAYER
-        GDSIIFile::write_record(writer, 0x0D, DataType::TwoByteSignedInt, &self.layer.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0D,
+            DataType::TwoByteSignedInt,
+            &self.layer.to_be_bytes(),
+        )?;
+
         // DATATYPE
-        GDSIIFile::write_record(writer, 0x0E, DataType::TwoByteSignedInt, &self.datatype.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0E,
+            DataType::TwoByteSignedInt,
+            &self.datatype.to_be_bytes(),
+        )?;
+
         // PATHTYPE
-        GDSIIFile::write_record(writer, 0x21, DataType::TwoByteSignedInt, &self.pathtype.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x21,
+            DataType::TwoByteSignedInt,
+            &self.pathtype.to_be_bytes(),
+        )?;
+
         // WIDTH
         if let Some(w) = self.width {
             GDSIIFile::write_record(writer, 0x0F, DataType::FourByteSignedInt, &w.to_be_bytes())?;
         }
-        
+
         // XY
         let mut xy_data = Vec::new();
         for (x, y) in &self.xy {
@@ -789,10 +882,10 @@ impl GPath {
             xy_data.extend_from_slice(&y.to_be_bytes());
         }
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -801,24 +894,24 @@ impl StructRef {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // SREF
         GDSIIFile::write_record(writer, 0x0A, DataType::NoData, &[])?;
-        
+
         // SNAME
         GDSIIFile::write_record(writer, 0x12, DataType::AsciiString, self.sname.as_bytes())?;
-        
+
         // STRANS
         if let Some(ref st) = self.strans {
             st.write(writer)?;
         }
-        
+
         // XY
         let mut xy_data = Vec::new();
         xy_data.extend_from_slice(&self.xy.0.to_be_bytes());
         xy_data.extend_from_slice(&self.xy.1.to_be_bytes());
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -827,21 +920,21 @@ impl ArrayRef {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // AREF
         GDSIIFile::write_record(writer, 0x0B, DataType::NoData, &[])?;
-        
+
         // SNAME
         GDSIIFile::write_record(writer, 0x12, DataType::AsciiString, self.sname.as_bytes())?;
-        
+
         // STRANS
         if let Some(ref st) = self.strans {
             st.write(writer)?;
         }
-        
+
         // COLROW
         let mut colrow_data = Vec::new();
         colrow_data.extend_from_slice(&(self.columns as i16).to_be_bytes());
         colrow_data.extend_from_slice(&(self.rows as i16).to_be_bytes());
         GDSIIFile::write_record(writer, 0x13, DataType::TwoByteSignedInt, &colrow_data)?;
-        
+
         // XY (3 points)
         let mut xy_data = Vec::new();
         for (x, y) in &self.xy {
@@ -849,10 +942,10 @@ impl ArrayRef {
             xy_data.extend_from_slice(&y.to_be_bytes());
         }
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -861,35 +954,45 @@ impl GText {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // TEXT
         GDSIIFile::write_record(writer, 0x0C, DataType::NoData, &[])?;
-        
+
         // LAYER
-        GDSIIFile::write_record(writer, 0x0D, DataType::TwoByteSignedInt, &self.layer.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0D,
+            DataType::TwoByteSignedInt,
+            &self.layer.to_be_bytes(),
+        )?;
+
         // TEXTTYPE
-        GDSIIFile::write_record(writer, 0x16, DataType::TwoByteSignedInt, &self.texttype.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x16,
+            DataType::TwoByteSignedInt,
+            &self.texttype.to_be_bytes(),
+        )?;
+
         // PRESENTATION
         if let Some(p) = self.presentation {
             GDSIIFile::write_record(writer, 0x17, DataType::TwoByteSignedInt, &p.to_be_bytes())?;
         }
-        
+
         // STRANS
         if let Some(ref st) = self.strans {
             st.write(writer)?;
         }
-        
+
         // XY
         let mut xy_data = Vec::new();
         xy_data.extend_from_slice(&self.xy.0.to_be_bytes());
         xy_data.extend_from_slice(&self.xy.1.to_be_bytes());
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // STRING
         GDSIIFile::write_record(writer, 0x19, DataType::AsciiString, self.string.as_bytes())?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -898,13 +1001,23 @@ impl Node {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // NODE
         GDSIIFile::write_record(writer, 0x15, DataType::NoData, &[])?;
-        
+
         // LAYER
-        GDSIIFile::write_record(writer, 0x0D, DataType::TwoByteSignedInt, &self.layer.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0D,
+            DataType::TwoByteSignedInt,
+            &self.layer.to_be_bytes(),
+        )?;
+
         // NODETYPE
-        GDSIIFile::write_record(writer, 0x2A, DataType::TwoByteSignedInt, &self.nodetype.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x2A,
+            DataType::TwoByteSignedInt,
+            &self.nodetype.to_be_bytes(),
+        )?;
+
         // XY
         let mut xy_data = Vec::new();
         for (x, y) in &self.xy {
@@ -912,10 +1025,10 @@ impl Node {
             xy_data.extend_from_slice(&y.to_be_bytes());
         }
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -924,13 +1037,23 @@ impl GDSBox {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Box<dyn std::error::Error>> {
         // BOX
         GDSIIFile::write_record(writer, 0x2D, DataType::NoData, &[])?;
-        
+
         // LAYER
-        GDSIIFile::write_record(writer, 0x0D, DataType::TwoByteSignedInt, &self.layer.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x0D,
+            DataType::TwoByteSignedInt,
+            &self.layer.to_be_bytes(),
+        )?;
+
         // BOXTYPE
-        GDSIIFile::write_record(writer, 0x2E, DataType::TwoByteSignedInt, &self.boxtype.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x2E,
+            DataType::TwoByteSignedInt,
+            &self.boxtype.to_be_bytes(),
+        )?;
+
         // XY
         let mut xy_data = Vec::new();
         for (x, y) in &self.xy {
@@ -938,10 +1061,10 @@ impl GDSBox {
             xy_data.extend_from_slice(&y.to_be_bytes());
         }
         GDSIIFile::write_record(writer, 0x10, DataType::FourByteSignedInt, &xy_data)?;
-        
+
         // ENDEL
         GDSIIFile::write_record(writer, 0x11, DataType::NoData, &[])?;
-        
+
         Ok(())
     }
 }
@@ -959,18 +1082,33 @@ impl STrans {
         if self.absolute_angle {
             flags |= 0x0002;
         }
-        GDSIIFile::write_record(writer, 0x1A, DataType::TwoByteSignedInt, &flags.to_be_bytes())?;
-        
+        GDSIIFile::write_record(
+            writer,
+            0x1A,
+            DataType::TwoByteSignedInt,
+            &flags.to_be_bytes(),
+        )?;
+
         // MAG
         if let Some(mag) = self.magnification {
-            GDSIIFile::write_record(writer, 0x1B, DataType::EightByteReal, &GDSIIFile::format_real8(mag))?;
+            GDSIIFile::write_record(
+                writer,
+                0x1B,
+                DataType::EightByteReal,
+                &GDSIIFile::format_real8(mag),
+            )?;
         }
-        
+
         // ANGLE
         if let Some(angle) = self.angle {
-            GDSIIFile::write_record(writer, 0x1C, DataType::EightByteReal, &GDSIIFile::format_real8(angle))?;
+            GDSIIFile::write_record(
+                writer,
+                0x1C,
+                DataType::EightByteReal,
+                &GDSIIFile::format_real8(angle),
+            )?;
         }
-        
+
         Ok(())
     }
 }
@@ -984,23 +1122,23 @@ mod tests {
     fn test_gdsii_create_and_write() {
         let mut gds = GDSIIFile::new("TEST_LIB".to_string());
         gds.units = (1e-6, 1e-9);
-        
+
         let mut structure = GDSStructure {
             name: "TOP".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         structure.elements.push(GDSElement::Boundary(Boundary {
             layer: 1,
             datatype: 0,
             xy: vec![(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)],
             properties: Vec::new(),
         }));
-        
+
         gds.structures.push(structure);
-        
+
         assert!(gds.write_to_file("test_gdsii_create.gds").is_ok());
         std::fs::remove_file("test_gdsii_create.gds").ok();
     }
@@ -1009,21 +1147,21 @@ mod tests {
     fn test_gdsii_round_trip() {
         let mut gds = GDSIIFile::new("ROUNDTRIP".to_string());
         gds.units = (1e-6, 1e-9);
-        
+
         let mut structure = GDSStructure {
             name: "CELL1".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         structure.elements.push(GDSElement::Boundary(Boundary {
             layer: 5,
             datatype: 2,
             xy: vec![(10, 20), (110, 20), (110, 120), (10, 120), (10, 20)],
             properties: Vec::new(),
         }));
-        
+
         structure.elements.push(GDSElement::Path(GPath {
             layer: 3,
             datatype: 1,
@@ -1032,29 +1170,29 @@ mod tests {
             xy: vec![(0, 0), (100, 100), (200, 100)],
             properties: Vec::new(),
         }));
-        
+
         gds.structures.push(structure);
         gds.write_to_file("test_roundtrip.gds").unwrap();
-        
+
         let gds_read = GDSIIFile::read_from_file("test_roundtrip.gds").unwrap();
-        
+
         assert_eq!(gds_read.library_name, "ROUNDTRIP");
         assert_eq!(gds_read.structures.len(), 1);
-        
+
         std::fs::remove_file("test_roundtrip.gds").ok();
     }
 
     #[test]
     fn test_gdsii_text_element() {
         let mut gds = GDSIIFile::new("TEXT_TEST".to_string());
-        
+
         let mut structure = GDSStructure {
             name: "TEXT_CELL".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         structure.elements.push(GDSElement::Text(GText {
             layer: 10,
             texttype: 0,
@@ -1065,12 +1203,12 @@ mod tests {
             width: None,
             properties: Vec::new(),
         }));
-        
+
         gds.structures.push(structure);
         gds.write_to_file("test_text.gds").unwrap();
-        
+
         let gds_read = GDSIIFile::read_from_file("test_text.gds").unwrap();
-        
+
         if let GDSElement::Text(t) = &gds_read.structures[0].elements[0] {
             assert_eq!(t.string, "Test Label");
             assert_eq!(t.layer, 10);
@@ -1078,14 +1216,14 @@ mod tests {
         } else {
             panic!("Expected Text element");
         }
-        
+
         std::fs::remove_file("test_text.gds").ok();
     }
 
     #[test]
     fn test_gdsii_struct_ref() {
         let mut gds = GDSIIFile::new("HIERARCHY_TEST".to_string());
-        
+
         let subcell = GDSStructure {
             name: "SUBCELL".to_string(),
             creation_time: GDSTime::now(),
@@ -1097,63 +1235,63 @@ mod tests {
                 properties: Vec::new(),
             })],
         };
-        
+
         let mut topcell = GDSStructure {
             name: "TOP".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         topcell.elements.push(GDSElement::StructRef(StructRef {
             sname: "SUBCELL".to_string(),
             xy: (100, 200),
             strans: None,
             properties: Vec::new(),
         }));
-        
+
         gds.structures.push(subcell);
         gds.structures.push(topcell);
-        
+
         gds.write_to_file("test_hierarchy.gds").unwrap();
         let gds_read = GDSIIFile::read_from_file("test_hierarchy.gds").unwrap();
-        
+
         assert_eq!(gds_read.structures.len(), 2);
-        
+
         std::fs::remove_file("test_hierarchy.gds").ok();
     }
 
     #[test]
     fn test_gdsii_empty_structure() {
         let mut gds = GDSIIFile::new("EMPTY_TEST".to_string());
-        
+
         let empty_structure = GDSStructure {
             name: "EMPTY".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         gds.structures.push(empty_structure);
         gds.write_to_file("test_empty.gds").unwrap();
-        
+
         let gds_read = GDSIIFile::read_from_file("test_empty.gds").unwrap();
         assert_eq!(gds_read.structures[0].elements.len(), 0);
-        
+
         std::fs::remove_file("test_empty.gds").ok();
     }
 
     #[test]
     fn test_gdsii_multiple_layers() {
         let mut gds = GDSIIFile::new("MULTILAYER".to_string());
-        
+
         let mut structure = GDSStructure {
             name: "MULTILAYER_CELL".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         for layer in 1..=5 {
             let base = (layer as i32) * 100;
             structure.elements.push(GDSElement::Boundary(Boundary {
@@ -1169,27 +1307,27 @@ mod tests {
                 properties: Vec::new(),
             }));
         }
-        
+
         gds.structures.push(structure);
         gds.write_to_file("test_multilayer.gds").unwrap();
-        
+
         let gds_read = GDSIIFile::read_from_file("test_multilayer.gds").unwrap();
         assert_eq!(gds_read.structures[0].elements.len(), 5);
-        
+
         std::fs::remove_file("test_multilayer.gds").ok();
     }
 
     #[test]
     fn test_gdsii_complex_polygon() {
         let mut gds = GDSIIFile::new("COMPLEX_POLY".to_string());
-        
+
         let mut structure = GDSStructure {
             name: "COMPLEX".to_string(),
             creation_time: GDSTime::now(),
             modification_time: GDSTime::now(),
             elements: Vec::new(),
         };
-        
+
         structure.elements.push(GDSElement::Boundary(Boundary {
             layer: 1,
             datatype: 0,
@@ -1206,19 +1344,19 @@ mod tests {
             ],
             properties: Vec::new(),
         }));
-        
+
         gds.structures.push(structure);
         gds.write_to_file("test_complex.gds").unwrap();
-        
+
         let gds_read = GDSIIFile::read_from_file("test_complex.gds").unwrap();
-        
+
         if let GDSElement::Boundary(b) = &gds_read.structures[0].elements[0] {
             assert_eq!(b.xy.len(), 9);
             assert_eq!(b.xy[0], b.xy[8]);
         } else {
             panic!("Expected Boundary");
         }
-        
+
         std::fs::remove_file("test_complex.gds").ok();
     }
 }
